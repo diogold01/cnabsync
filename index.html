@@ -122,6 +122,32 @@
     ::-webkit-scrollbar-thumb:hover {
       background: var(--ink-secondary);
     }
+
+    @media print {
+      body > *:not(#pdfPreviewModal) {
+        display: none !important;
+      }
+      #pdfPreviewModal {
+        position: static !important;
+        inset: auto !important;
+        background: #ffffff !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        display: block !important;
+      }
+      #pdfPreviewToolbar {
+        display: none !important;
+      }
+      #pdfPreviewSheet {
+        box-shadow: none !important;
+        border: none !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+      }
+    }
   </style>
 </head>
 <body data-density="comfortable" class="min-h-screen flex flex-col">
@@ -140,7 +166,7 @@
   </div>
 
   <!-- 1. NAV SIMPLES -->
-  <header class="max-w-[1240px] w-full mx-auto px-5 sm:px-10 py-5 flex items-center justify-between flex-wrap gap-3">
+  <header class="max-w-[1440px] w-full mx-auto px-5 sm:px-10 py-5 flex items-center justify-between flex-wrap gap-3">
     <div class="flex items-baseline gap-3">
       <span class="text-[18px] font-semibold tracking-[-0.01em] text-[#171A20]">CnabSync</span>
       <span class="text-[13px] text-[#5C5E62]">v3.0 · CNAB 400 e 240</span>
@@ -162,7 +188,7 @@
   <main class="flex-1 w-full">
 
     <!-- 2. HERO -->
-    <section class="max-w-[1240px] mx-auto px-5 sm:px-10 pt-[clamp(40px,8vw,88px)]">
+    <section class="max-w-[1440px] mx-auto px-5 sm:px-10 pt-[clamp(40px,8vw,88px)]">
       <p id="heroEyebrow" class="text-[15px] text-[#5C5E62] mb-5">Resumo de 13 de novembro</p>
       <h1 id="heroHeadline" class="text-[clamp(40px,6.4vw,88px)] font-light tracking-[-0.035em] leading-[1.02] max-w-[1000px] text-[#171A20]">
         Carregando conciliação...
@@ -218,7 +244,7 @@
     </section>
 
     <!-- 3. LINHA FINA DE STATUS DE IMPORTAÇÃO -->
-    <section aria-label="Arquivos carregados" class="max-w-[1240px] mx-auto px-5 sm:px-10 pt-[72px]">
+    <section aria-label="Arquivos carregados" class="max-w-[1440px] mx-auto px-5 sm:px-10 pt-[72px]">
       <div class="flex flex-wrap border-t border-b border-[#E6E6E4]">
         <div id="dropRem" class="drop-cell flex-1 min-w-[280px] flex items-center justify-between gap-4 py-5 md:pr-8">
           <input type="file" id="inputRem" webkitdirectory directory multiple class="hidden" aria-hidden="true">
@@ -268,7 +294,7 @@
     </section>
 
     <!-- 4. QUATRO NÚMEROS GRANDES (FILTROS) + BARRA EMPILHADA -->
-    <section aria-label="Indicadores" class="max-w-[1240px] mx-auto px-5 sm:px-10 pt-[72px]">
+    <section aria-label="Indicadores" class="max-w-[1440px] mx-auto px-5 sm:px-10 pt-[72px]">
       <div class="flex flex-wrap gap-x-10 gap-y-2" role="group" aria-label="Filtrar por situação">
         <button type="button" class="kpi-cell active-kpi flex-1 min-w-[200px] pt-5 pb-3 text-left flex flex-col gap-1 border-t-2 border-[#171A20] cursor-pointer" data-kpi-filter="todos" aria-pressed="true">
           <span class="text-[14px] text-[#5C5E62]">Conciliados</span>
@@ -307,7 +333,7 @@
     </section>
 
     <!-- 5. ATENÇÃO AGORA + ALERTA DE NSA -->
-    <section id="attentionSection" aria-label="Atenção agora" class="max-w-[1240px] mx-auto px-5 sm:px-10 pt-[96px]">
+    <section id="attentionSection" aria-label="Atenção agora" class="max-w-[1440px] mx-auto px-5 sm:px-10 pt-[96px]">
       <div id="attentionHeaderWrap">
         <div class="flex items-baseline justify-between flex-wrap gap-3 mb-6">
           <h2 class="text-[28px] sm:text-[32px] font-normal tracking-[-0.02em] text-[#171A20] m-0">Atenção agora</h2>
@@ -325,7 +351,7 @@
     </section>
 
     <!-- 6 & 7. LISTA DE TÍTULOS COM EXPANSÃO INLINE -->
-    <section id="ledger" aria-label="Títulos" class="max-w-[1240px] mx-auto px-5 sm:px-10 pt-[96px]">
+    <section id="ledger" aria-label="Títulos" class="max-w-[1440px] mx-auto px-5 sm:px-10 pt-[96px]">
       <div class="flex items-end justify-between flex-wrap gap-4 mb-6">
         <div>
           <h2 id="listTitle" class="text-[28px] sm:text-[32px] font-normal tracking-[-0.02em] text-[#171A20] m-0">Todos os títulos</h2>
@@ -333,24 +359,52 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <!-- Controle de densidade -->
-          <div class="inline-flex items-center bg-[#F5F5F3] rounded-full p-1 min-h-[44px]" role="group" aria-label="Densidade da lista">
-            <button type="button" id="btnDensityComfortable" aria-pressed="true" class="min-h-[36px] px-4 rounded-full text-[13px] font-medium bg-[#FFFFFF] text-[#171A20] transition-colors cursor-pointer">
-              Confortável
+          <div class="relative" id="exportDivergenciasWrap">
+            <button
+              type="button"
+              id="btnExportDivergencias"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center gap-2 bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[#171A20] transition-colors cursor-pointer"
+            >
+              <span>Exportar divergências</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
             </button>
-            <button type="button" id="btnDensityCompact" aria-pressed="false" class="min-h-[36px] px-4 rounded-full text-[13px] font-medium text-[#5C5E62] hover:text-[#171A20] transition-colors cursor-pointer">
-              Compacta
-            </button>
+            <div
+              id="exportDivergenciasMenu"
+              role="menu"
+              aria-label="Formato de exportação"
+              class="hidden absolute right-0 mt-2 w-48 bg-[#FFFFFF] border border-[#E6E6E4] rounded-[16px] p-1.5 z-30 shadow-sm"
+            >
+              <button
+                type="button"
+                id="btnExportDivCsv"
+                role="menuitem"
+                class="w-full text-left min-h-[40px] px-3.5 rounded-[10px] text-[14px] font-medium text-[#171A20] hover:bg-[#F5F5F3] flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <span>CSV</span>
+                <span class="text-[11px] font-normal text-[#5C5E62]">UTF-8 BOM</span>
+              </button>
+              <button
+                type="button"
+                id="btnExportDivJson"
+                role="menuitem"
+                class="w-full text-left min-h-[40px] px-3.5 rounded-[10px] text-[14px] font-medium text-[#171A20] hover:bg-[#F5F5F3] flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <span>JSON</span>
+                <span class="text-[11px] font-normal text-[#5C5E62]">Estruturado</span>
+              </button>
+            </div>
           </div>
 
-          <button type="button" id="btnExportDivergencias" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[#171A20] transition-colors cursor-pointer">
-            Exportar divergências
-          </button>
-          <button type="button" id="btnExportCsv" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[#171A20] transition-colors cursor-pointer">
-            CSV
-          </button>
-          <button type="button" id="btnExportJson" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[#171A20] transition-colors cursor-pointer">
-            JSON
+          <button type="button" id="btnPreviewPdf" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center gap-2 bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[#171A20] transition-colors cursor-pointer">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span>Visualizar</span>
           </button>
         </div>
       </div>
@@ -388,12 +442,38 @@
   </main>
 
   <!-- 8. RODAPÉ -->
-  <footer class="max-w-[1240px] w-full mx-auto px-5 sm:px-10 pt-[96px] pb-12">
+  <footer class="max-w-[1440px] w-full mx-auto px-5 sm:px-10 pt-[96px] pb-12">
     <div class="border-t border-[#E6E6E4] pt-6 flex flex-wrap justify-between gap-x-8 gap-y-3 text-[13px] text-[#5C5E62] leading-[1.5]">
       <span>Sicredi (748) · Cresol (133) · Caixa Econômica (104) · Santander (033) · Safra (422) · Sicoob (756) · Banco do Brasil (001) · Bradesco (237) · Itaú (341)</span>
       <span>Tudo roda no seu navegador. Os arquivos não saem do computador.</span>
     </div>
   </footer>
+
+  <!-- Modal de pré-visualização PDF (Divergências) -->
+  <div id="pdfPreviewModal" role="dialog" aria-modal="true" aria-labelledby="pdfModalTitle" class="fixed inset-0 z-50 hidden flex-col bg-[#2C2E33]/85 overflow-y-auto">
+    <div id="pdfPreviewToolbar" class="sticky top-0 z-10 bg-[#171A20] text-white px-5 sm:px-8 py-3.5 flex items-center justify-between flex-wrap gap-3 border-b border-white/10">
+      <div class="flex items-center gap-3">
+        <span id="pdfModalTitle" class="text-[14px] font-medium">Pré-visualização PDF · Divergências</span>
+        <span id="pdfModalCount" class="text-[12px] text-[#A0A3A8] tabular-nums"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" id="btnPrintPdf" class="min-h-[40px] px-5 rounded-full bg-[#2D5BD9] hover:bg-[#2349B5] text-white text-[13px] font-medium inline-flex items-center gap-2 transition-colors cursor-pointer">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+          <span>Imprimir / Salvar PDF</span>
+        </button>
+        <button type="button" id="btnClosePdfPreview" class="min-h-[40px] px-4 rounded-full bg-white/10 hover:bg-white/20 text-white text-[13px] font-medium transition-colors cursor-pointer">
+          Fechar
+        </button>
+      </div>
+    </div>
+    <div class="p-4 sm:p-8 flex justify-center">
+      <div id="pdfPreviewSheet" class="w-full max-w-[900px] bg-white text-[#171A20] rounded-[6px] shadow-2xl p-6 sm:p-12">
+        <div id="pdfPreviewContent"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Toast de confirmação -->
   <div id="toastBanner" role="status" aria-live="polite" class="fixed bottom-5 right-5 z-50 hidden items-center gap-2.5 bg-[#171A20] text-white rounded-full px-5 py-3 text-[13px] font-medium">
@@ -1979,8 +2059,6 @@
     };
 
     const dom = {
-      btnDensityComfortable: document.getElementById('btnDensityComfortable'),
-      btnDensityCompact: document.getElementById('btnDensityCompact'),
       btnLoadDemo: document.getElementById('btnLoadDemo'),
       btnImportFolders: document.getElementById('btnImportFolders'),
       btnResetSession: document.getElementById('btnResetSession'),
@@ -2041,9 +2119,17 @@
 
       listTitle: document.getElementById('listTitle'),
       listCount: document.getElementById('listCount'),
+      exportDivergenciasWrap: document.getElementById('exportDivergenciasWrap'),
       btnExportDivergencias: document.getElementById('btnExportDivergencias'),
-      btnExportCsv: document.getElementById('btnExportCsv'),
-      btnExportJson: document.getElementById('btnExportJson'),
+      exportDivergenciasMenu: document.getElementById('exportDivergenciasMenu'),
+      btnExportDivCsv: document.getElementById('btnExportDivCsv'),
+      btnExportDivJson: document.getElementById('btnExportDivJson'),
+      btnPreviewPdf: document.getElementById('btnPreviewPdf'),
+      pdfPreviewModal: document.getElementById('pdfPreviewModal'),
+      pdfModalCount: document.getElementById('pdfModalCount'),
+      pdfPreviewContent: document.getElementById('pdfPreviewContent'),
+      btnPrintPdf: document.getElementById('btnPrintPdf'),
+      btnClosePdfPreview: document.getElementById('btnClosePdfPreview'),
       listBody: document.getElementById('listBody'),
       paginationBar: document.getElementById('paginationBar'),
       paginationInfo: document.getElementById('paginationInfo'),
@@ -2174,22 +2260,6 @@
         }
         return false;
       }
-    }
-
-    // Density Toggle ("Confortável" | "Compacta")
-    function setupDensityControls() {
-      const setDensity = (mode) => {
-        document.body.setAttribute('data-density', mode);
-        const activeCls = 'min-h-[36px] px-4 rounded-full text-[13px] font-medium bg-[#FFFFFF] text-[#171A20] transition-colors cursor-pointer';
-        const inactiveCls = 'min-h-[36px] px-4 rounded-full text-[13px] font-medium text-[#5C5E62] hover:text-[#171A20] transition-colors cursor-pointer';
-        dom.btnDensityComfortable.className = mode === 'comfortable' ? activeCls : inactiveCls;
-        dom.btnDensityCompact.className = mode === 'compact' ? activeCls : inactiveCls;
-        dom.btnDensityComfortable.setAttribute('aria-pressed', String(mode === 'comfortable'));
-        dom.btnDensityCompact.setAttribute('aria-pressed', String(mode === 'compact'));
-      };
-
-      dom.btnDensityComfortable.addEventListener('click', () => setDensity('comfortable'));
-      dom.btnDensityCompact.addEventListener('click', () => setDensity('compact'));
     }
 
     // File Upload, File System Access API & Drag-and-Drop
@@ -3168,7 +3238,11 @@
           dom.searchInput.focus();
           dom.searchInput.select();
         } else if (e.key === 'Escape') {
-          if (state.itemEmDiagnostico) {
+          if (!dom.pdfPreviewModal.classList.contains('hidden')) {
+            fecharPreviewPdf();
+          } else if (!dom.exportDivergenciasMenu.classList.contains('hidden')) {
+            fecharMenuDivergencias();
+          } else if (state.itemEmDiagnostico) {
             state.itemEmDiagnostico = null;
             renderTabela();
           }
@@ -3176,7 +3250,138 @@
       });
     }
 
-    // Pagination & Exports (CSV UTF-8 BOM + JSON)
+    function getDivergencias() {
+      return sortByVencimentoAsc(
+        state.conciliados.filter(c =>
+          c.status === 'REJEITADO' || c.status === 'SEM_RETORNO' || c.status === 'AVULSO'
+        )
+      );
+    }
+
+    function fecharMenuDivergencias() {
+      dom.exportDivergenciasMenu.classList.add('hidden');
+      dom.btnExportDivergencias.setAttribute('aria-expanded', 'false');
+    }
+
+    function fecharPreviewPdf() {
+      dom.pdfPreviewModal.classList.add('hidden');
+      dom.pdfPreviewModal.classList.remove('flex');
+      document.body.style.overflow = '';
+    }
+
+    function abrirPreviewPdfDivergencias() {
+      if (state.conciliados.length === 0) {
+        showToast('Nenhum dado carregado para visualizar.');
+        return;
+      }
+      const divergencias = getDivergencias();
+      if (divergencias.length === 0) {
+        showToast('Nenhuma divergência encontrada para visualizar.');
+        return;
+      }
+
+      const rejCount = divergencias.filter(d => d.status === 'REJEITADO').length;
+      const srCount = divergencias.filter(d => d.status === 'SEM_RETORNO').length;
+      const avCount = divergencias.filter(d => d.status === 'AVULSO').length;
+      const totalValor = divergencias.reduce((acc, d) => acc + d.valor, 0);
+      const dataGeracao = new Date().toLocaleString('pt-BR');
+
+      const alertasHtml = (state.alertas && state.alertas.length > 0)
+        ? `<div style="margin-top:20px;padding:12px 16px;border:1px solid #E6E6E4;border-radius:8px;background:#F5F5F3;font-size:12px;color:#171A20;">
+            <strong>Alertas de sequência (NSA):</strong>
+            ${state.alertas.map(a => `${escapeHtml(a.titulo)} — ${escapeHtml((a.badges || []).join(', '))}`).join(' | ')}
+          </div>`
+        : '';
+
+      const rowsHtml = divergencias.map(item => {
+        const st = STATUS_META[item.status] || { label: item.statusLabel, color: '#5C5E62' };
+        const motivo = item.motivoRejeicao
+          ? item.motivoRejeicao
+          : (item.status === 'SEM_RETORNO' ? 'Nenhum retorno localizado' : 'Retorno sem remessa no lote');
+
+        return `
+          <tr style="border-bottom:1px solid #E6E6E4;">
+            <td style="padding:10px 8px;vertical-align:top;font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap;">
+              <div>${escapeHtml(item.nossoNumeroFormatado)}</div>
+              <div style="color:#5C5E62;font-family:'Inter',sans-serif;font-size:10px;margin-top:2px;">${escapeHtml(item.bancoNome)} · Ag ${escapeHtml(item.agencia || '-')}</div>
+            </td>
+            <td style="padding:10px 8px;vertical-align:top;font-size:12px;">
+              <div style="font-weight:500;">${escapeHtml(formatarNomeMisto(item.nomeSacado))}</div>
+              <div style="color:#5C5E62;font-size:10px;margin-top:2px;">${escapeHtml(CnabParser.formatarCpfCnpj(item.cpfCnpj))}</div>
+            </td>
+            <td style="padding:10px 8px;vertical-align:top;text-align:right;font-size:12px;font-weight:500;white-space:nowrap;">
+              ${escapeHtml(item.valorFormatado)}
+            </td>
+            <td style="padding:10px 8px;vertical-align:top;font-size:12px;white-space:nowrap;">
+              ${escapeHtml(item.dataVencimento)}
+            </td>
+            <td style="padding:10px 8px;vertical-align:top;font-size:11px;">
+              <span style="display:inline-flex;align-items:center;gap:5px;font-weight:600;color:${st.color};">
+                <span style="width:6px;height:6px;border-radius:9999px;background:${st.color};display:inline-block;"></span>
+                ${escapeHtml(st.label)}
+              </span>
+              <div style="color:#5C5E62;font-size:10px;margin-top:2px;">${escapeHtml(motivo)}</div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      dom.pdfModalCount.textContent = `${divergencias.length} ${plural(divergencias.length, 'registro', 'registros')}`;
+      dom.pdfPreviewContent.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:18px;border-bottom:2px solid #171A20;">
+          <div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#5C5E62;">CnabSync · Auditoria CNAB</div>
+            <h2 style="font-size:24px;font-weight:500;margin:4px 0 0 0;color:#171A20;">Relatório de Divergências</h2>
+          </div>
+          <div style="text-align:right;font-size:11px;color:#5C5E62;">
+            <div>Gerado em ${escapeHtml(dataGeracao)}</div>
+            <div style="margin-top:2px;">${state.isDemo ? 'Conjunto de demonstração' : 'Arquivos locais conciliados'}</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:18px;">
+          <div style="padding:12px;background:#F5F5F3;border-radius:8px;">
+            <div style="font-size:11px;color:#5C5E62;">Divergências</div>
+            <div style="font-size:22px;font-weight:300;margin-top:2px;">${divergencias.length}</div>
+          </div>
+          <div style="padding:12px;background:#F5F5F3;border-radius:8px;">
+            <div style="font-size:11px;color:#5C5E62;">Rejeitados</div>
+            <div style="font-size:22px;font-weight:300;color:#B3261E;margin-top:2px;">${rejCount}</div>
+          </div>
+          <div style="padding:12px;background:#F5F5F3;border-radius:8px;">
+            <div style="font-size:11px;color:#5C5E62;">Sem retorno</div>
+            <div style="font-size:22px;font-weight:300;color:#9A5A00;margin-top:2px;">${srCount}${avCount > 0 ? ` + ${avCount} avulso` : ''}</div>
+          </div>
+          <div style="padding:12px;background:#F5F5F3;border-radius:8px;">
+            <div style="font-size:11px;color:#5C5E62;">Valor total</div>
+            <div style="font-size:18px;font-weight:500;margin-top:4px;">${escapeHtml(CnabParser.formatarMoeda(totalValor))}</div>
+          </div>
+        </div>
+
+        ${alertasHtml}
+
+        <table style="width:100%;border-collapse:collapse;margin-top:22px;text-align:left;">
+          <thead>
+            <tr style="border-bottom:1px solid #171A20;font-size:11px;color:#5C5E62;text-transform:uppercase;letter-spacing:0.04em;">
+              <th style="padding:8px;">Nosso número</th>
+              <th style="padding:8px;">Pagador</th>
+              <th style="padding:8px;text-align:right;">Valor</th>
+              <th style="padding:8px;">Vencimento</th>
+              <th style="padding:8px;">Status e motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      `;
+
+      dom.pdfPreviewModal.classList.remove('hidden');
+      dom.pdfPreviewModal.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+    }
+
+    // Pagination & Exports (Divergências CSV/JSON + PDF Preview)
     function exportarItensCsv(itens, prefixoArquivo, toastMsg) {
       const headers = ['ChaveComposta', 'NossoNumero', 'Banco', 'Agencia', 'Layout', 'Sacado', 'CPF_CNPJ', 'Valor', 'Vencimento', 'Remessa', 'Status', 'MotivoRejeicao', 'Retornos'];
       const rows = itens.map(c => [
@@ -3219,18 +3424,31 @@
         }
       });
 
-      dom.btnExportDivergencias.addEventListener('click', () => {
+      dom.btnExportDivergencias.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (state.conciliados.length === 0) {
           showToast('Nenhum dado carregado para exportar.');
           return;
         }
-        const divergencias = state.conciliados.filter(c =>
-          c.status === 'REJEITADO' || c.status === 'SEM_RETORNO' || c.status === 'AVULSO'
-        );
+        const divergencias = getDivergencias();
         if (divergencias.length === 0) {
           showToast('Nenhuma divergência encontrada para exportar.');
           return;
         }
+        const isOpen = !dom.exportDivergenciasMenu.classList.contains('hidden');
+        dom.exportDivergenciasMenu.classList.toggle('hidden', isOpen);
+        dom.btnExportDivergencias.setAttribute('aria-expanded', String(!isOpen));
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!dom.exportDivergenciasWrap.contains(e.target)) {
+          fecharMenuDivergencias();
+        }
+      });
+
+      dom.btnExportDivCsv.addEventListener('click', () => {
+        fecharMenuDivergencias();
+        const divergencias = getDivergencias();
         exportarItensCsv(
           divergencias,
           'cnabsync_divergencias',
@@ -3238,39 +3456,31 @@
         );
       });
 
-      dom.btnExportCsv.addEventListener('click', () => {
-        if (state.conciliados.length === 0) {
-          showToast('Nenhum dado carregado para exportar.');
-          return;
-        }
-        exportarItensCsv(
-          state.conciliados,
-          'cnabsync_conciliacao',
-          'Relatório CSV exportado (UTF-8 BOM).'
-        );
-      });
-
-      dom.btnExportJson.addEventListener('click', () => {
-        if (state.conciliados.length === 0) {
-          showToast('Nenhum dado carregado para exportar.');
-          return;
-        }
+      dom.btnExportDivJson.addEventListener('click', () => {
+        fecharMenuDivergencias();
+        const divergencias = getDivergencias();
         const payload = {
           geradoEm: new Date().toISOString(),
           resumo: {
-            total: state.conciliados.length,
-            pagos: state.conciliados.filter(c => c.status === 'PAGO').length,
-            confirmados: state.conciliados.filter(c => c.status === 'CONFIRMADO').length,
-            semRetorno: state.conciliados.filter(c => c.status === 'SEM_RETORNO').length,
-            rejeitados: state.conciliados.filter(c => c.status === 'REJEITADO').length
+            totalDivergencias: divergencias.length,
+            rejeitados: divergencias.filter(c => c.status === 'REJEITADO').length,
+            semRetorno: divergencias.filter(c => c.status === 'SEM_RETORNO').length,
+            avulsos: divergencias.filter(c => c.status === 'AVULSO').length
           },
           alertas: state.alertas,
-          titulos: state.conciliados
+          divergencias
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        baixarBlob(url, `cnabsync_dados_${new Date().toISOString().slice(0, 10)}.json`);
-        showToast('Arquivo JSON exportado.');
+        baixarBlob(url, `cnabsync_divergencias_${new Date().toISOString().slice(0, 10)}.json`);
+        showToast(`${divergencias.length} divergência(s) exportada(s) em JSON.`);
+      });
+
+      dom.btnPreviewPdf.addEventListener('click', abrirPreviewPdfDivergencias);
+      dom.btnPrintPdf.addEventListener('click', () => window.print());
+      dom.btnClosePdfPreview.addEventListener('click', fecharPreviewPdf);
+      dom.pdfPreviewModal.addEventListener('click', (e) => {
+        if (e.target === dom.pdfPreviewModal) fecharPreviewPdf();
       });
     }
 
@@ -3285,7 +3495,6 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-      setupDensityControls();
       setupFileHandling();
       setupListAndAttentionInteractions();
       setupFiltersAndKPIs();
