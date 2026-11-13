@@ -148,6 +148,87 @@
         border-radius: 0 !important;
       }
     }
+
+    /* Dark Mode */
+    html.dark {
+      --bg-page: #0F1115;
+      --bg-surface: #181B22;
+      --bg-surface-hover: #222630;
+      --bg-card-hover: #20242E;
+      --bg-row-hover: #161920;
+      --border-hairline: #2A2E39;
+      --ink-primary: #F1F3F5;
+      --ink-secondary: #9CA3AF;
+    }
+
+    html.dark body {
+      background-color: var(--bg-page);
+      color: var(--ink-primary);
+    }
+
+    html.dark .bg-\[\#FFFFFF\],
+    html.dark .bg-white {
+      background-color: #151820 !important;
+    }
+
+    html.dark .bg-\[\#F5F5F3\] {
+      background-color: #181B22 !important;
+    }
+
+    html.dark .hover\:bg-\[\#EBEBE8\]:hover,
+    html.dark .hover\:bg-\[\#EDEDEA\]:hover,
+    html.dark .hover\:bg-\[\#F5F5F3\]:hover {
+      background-color: #222630 !important;
+    }
+
+    html.dark .text-\[\#171A20\] {
+      color: #F1F3F5 !important;
+    }
+
+    html.dark .text-\[\#5C5E62\] {
+      color: #9CA3AF !important;
+    }
+
+    html.dark .placeholder-\[\#5C5E62\]::placeholder {
+      color: #9CA3AF !important;
+    }
+
+    html.dark .border-\[\#E6E6E4\],
+    html.dark .border-\[\#E0E0DD\],
+    html.dark .border-\[\#D0D1D2\],
+    html.dark .border-\[\#DCDCD8\] {
+      border-color: #2A2E39 !important;
+    }
+
+    html.dark .kpi-cell.active-kpi {
+      border-top-color: #F1F3F5 !important;
+    }
+
+    html.dark .kpi-cell:not(.active-kpi) {
+      border-top-color: #2A2E39 !important;
+    }
+
+    html.dark #btnPrintPdf,
+    html.dark #btnImportFolders {
+      color: #FFFFFF !important;
+    }
+
+    html.dark #toastBanner {
+      background-color: #F1F3F5 !important;
+      color: #171A20 !important;
+    }
+
+    html.dark ::-webkit-scrollbar-thumb {
+      background: #2A2E39;
+    }
+
+    html.dark #pdfPreviewSheet,
+    html.dark #pdfPreviewSheet * {
+      color: #171A20;
+    }
+    html.dark #pdfPreviewSheet {
+      background-color: #FFFFFF !important;
+    }
   </style>
 </head>
 <body data-density="comfortable" class="min-h-screen flex flex-col">
@@ -172,6 +253,15 @@
       <span class="text-[13px] text-[#5C5E62]">v3.0 · CNAB 400 e 240</span>
     </div>
     <nav class="flex items-center gap-2 flex-wrap" aria-label="Ações da sessão">
+      <button type="button" id="btnToggleTheme" aria-pressed="false" title="Alternar tema claro/escuro" class="min-h-[44px] px-4 rounded-full text-[14px] font-medium text-[#171A20] hover:bg-[#EBEBE8] transition-colors inline-flex items-center gap-2 cursor-pointer">
+        <svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <svg id="themeIconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="hidden">
+          <circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <span id="themeLabel">Escuro</span>
+      </button>
       <button type="button" id="btnLoadDemo" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium text-[#171A20] hover:bg-[#EBEBE8] transition-colors inline-flex items-center cursor-pointer">
         Carregar exemplo
       </button>
@@ -210,11 +300,11 @@
           placeholder="Nosso número, pagador, CPF/CNPJ ou linha digitável"
           class="w-full h-16 rounded-full bg-[#F5F5F3] border-0 pl-[58px] pr-[112px] text-[16px] sm:text-[17px] text-[#171A20] placeholder-[#5C5E62] transition-colors"
         >
-        <div class="absolute right-3 top-[10px] flex items-center gap-2">
+        <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
           <button type="button" id="btnClearSearch" class="hidden min-h-[44px] px-4 rounded-full text-[14px] font-medium text-[#171A20] hover:bg-[#EBEBE8] transition-colors items-center cursor-pointer">
             Limpar
           </button>
-          <span id="searchShortcutHint" aria-hidden="true" class="text-[13px] text-[#5C5E62] pr-3 select-none hidden sm:inline">⌘ K</span>
+          <kbd id="searchShortcutHint" aria-hidden="true" class="hidden sm:inline-flex items-center justify-center w-7 h-7 rounded-[8px] border border-[#DCDCD8] bg-[#FFFFFF] text-[13px] font-mono text-[#5C5E62] mr-2 select-none">/</kbd>
         </div>
       </div>
 
@@ -2059,6 +2149,10 @@
     };
 
     const dom = {
+      btnToggleTheme: document.getElementById('btnToggleTheme'),
+      themeIconMoon: document.getElementById('themeIconMoon'),
+      themeIconSun: document.getElementById('themeIconSun'),
+      themeLabel: document.getElementById('themeLabel'),
       btnLoadDemo: document.getElementById('btnLoadDemo'),
       btnImportFolders: document.getElementById('btnImportFolders'),
       btnResetSession: document.getElementById('btnResetSession'),
@@ -3184,11 +3278,11 @@
       if (val) {
         dom.btnClearSearch.classList.remove('hidden');
         dom.btnClearSearch.classList.add('inline-flex');
-        dom.searchShortcutHint.classList.add('hidden');
+        dom.searchShortcutHint.classList.add('!hidden');
       } else {
         dom.btnClearSearch.classList.add('hidden');
         dom.btnClearSearch.classList.remove('inline-flex');
-        dom.searchShortcutHint.classList.remove('hidden');
+        dom.searchShortcutHint.classList.remove('!hidden');
         dom.decodedBarcodeStrip.classList.add('hidden');
         dom.decodedBarcodeStrip.classList.remove('flex');
         syncFilterStyles();
@@ -3233,7 +3327,9 @@
       });
 
       document.addEventListener('keydown', (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        const tag = document.activeElement ? document.activeElement.tagName : '';
+        const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+        if ((e.key === '/' && !inField && !e.ctrlKey && !e.metaKey && !e.altKey) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) {
           e.preventDefault();
           dom.searchInput.focus();
           dom.searchInput.select();
@@ -3494,7 +3590,32 @@
       URL.revokeObjectURL(url);
     }
 
+    function setupThemeToggle() {
+      const applyTheme = (isDark) => {
+        document.documentElement.classList.toggle('dark', isDark);
+        dom.btnToggleTheme.setAttribute('aria-pressed', String(isDark));
+        dom.themeIconMoon.classList.toggle('hidden', isDark);
+        dom.themeIconSun.classList.toggle('hidden', !isDark);
+        dom.themeLabel.textContent = isDark ? 'Claro' : 'Escuro';
+      };
+
+      let saved = false;
+      try {
+        saved = localStorage.getItem('cnabsync_theme') === 'dark';
+      } catch (e) {}
+      applyTheme(saved);
+
+      dom.btnToggleTheme.addEventListener('click', () => {
+        const nextDark = !document.documentElement.classList.contains('dark');
+        applyTheme(nextDark);
+        try {
+          localStorage.setItem('cnabsync_theme', nextDark ? 'dark' : 'light');
+        } catch (e) {}
+      });
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
+      setupThemeToggle();
       setupFileHandling();
       setupListAndAttentionInteractions();
       setupFiltersAndKPIs();
