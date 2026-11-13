@@ -17,6 +17,12 @@ O CnabSync lê as pastas de remessa e retorno localmente, cruza os títulos pelo
 
 Tudo roda no seu navegador. Nenhum arquivo CNAB sai do computador ou é enviado para servidor.
 
+## Visualização
+
+![Visão geral do CnabSync](assets/preview-visao-geral.png)
+
+![Atenção agora e lista de pendências](assets/preview-pendencias.png)
+
 ## Bancos suportados
 
 Sicredi (748), Cresol (133), Caixa Econômica (104), Santander (033), Safra (422), Sicoob (756), Banco do Brasil (001), Bradesco (237) e Itaú (341).
