@@ -1,0 +1,3298 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CnabSync v3.0 — Conciliador e Auditor de Boletos CNAB</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Inter"', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    :root {
+      --bg-page: #FFFFFF;
+      --bg-surface: #F5F5F3;
+      --bg-surface-hover: #EBEBE8;
+      --bg-card-hover: #EDEDEA;
+      --bg-row-hover: #F7F7F5;
+      --border-hairline: #E6E6E4;
+      --ink-primary: #171A20;
+      --ink-secondary: #5C5E62;
+      --accent: #2D5BD9;
+      --status-paid: #1B7A4B;
+      --status-confirmed: #2D5BD9;
+      --status-pending: #9A5A00;
+      --status-rejected: #B3261E;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      background-color: var(--bg-page);
+      color: var(--ink-primary);
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: clip;
+    }
+
+    button {
+      font-family: inherit;
+    }
+
+    button:focus-visible,
+    input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Dropzone highlight */
+    .drop-cell {
+      transition: background-color 0.14s ease;
+    }
+
+    .drop-cell.drag-over {
+      background-color: var(--bg-surface);
+    }
+
+    /* Row expansion & density modes */
+    .rowhead {
+      transition: background-color 0.12s ease;
+    }
+
+    .rowhead:hover {
+      background-color: var(--bg-row-hover);
+    }
+
+    body[data-density="comfortable"] .rowhead {
+      padding-top: 22px;
+      padding-bottom: 22px;
+    }
+
+    body[data-density="compact"] .rowhead {
+      padding-top: 12px;
+      padding-bottom: 12px;
+    }
+
+    /* KPI filter tiles */
+    .kpi-cell {
+      transition: border-color 0.15s ease, opacity 0.15s ease;
+    }
+
+    .kpi-cell:hover {
+      border-top-color: #9A9C9F;
+    }
+
+    .kpi-cell.active-kpi {
+      border-top-color: var(--ink-primary);
+    }
+
+    /* Minimal Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-page);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #D0D1D2;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--ink-secondary);
+    }
+  </style>
+</head>
+<body data-density="comfortable" class="min-h-screen flex flex-col">
+
+  <!-- Global Drag & Drop Overlay -->
+  <div id="globalDragOverlay" class="fixed inset-0 z-50 hidden items-center justify-center bg-[#171A20]/25 p-6">
+    <div class="bg-white border border-[#E6E6E4] rounded-[20px] p-8 max-w-md w-full text-center">
+      <div class="w-11 h-11 rounded-full bg-[#F5F5F3] text-[#171A20] flex items-center justify-center mx-auto mb-3">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </div>
+      <h3 class="text-[16px] font-medium text-[#171A20]">Solte os arquivos CNAB para indexação</h3>
+      <p class="text-[14px] text-[#5C5E62] mt-1">Identificação automática de Remessa ou Retorno nos layouts CNAB 400 e CNAB 240.</p>
+    </div>
+  </div>
+
+  <!-- 1. NAV SIMPLES -->
+  <header class="max-w-[1240px] w-full mx-auto px-5 sm:px-10 py-5 flex items-center justify-between flex-wrap gap-3">
+    <div class="flex items-baseline gap-3">
+      <span class="text-[18px] font-semibold tracking-[-0.01em] text-[#171A20]">CnabSync</span>
+      <span class="text-[13px] text-[#5C5E62]">v3.0 · CNAB 400 e 240</span>
+    </div>
+    <nav class="flex items-center gap-2 flex-wrap" aria-label="Ações da sessão">
+      <button type="button" id="btnLoadDemo" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium text-[#171A20] hover:bg-[#EBEBE8] transition-colors inline-flex items-center cursor-pointer">
+        Carregar exemplo
+      </button>
+      <button type="button" id="btnImportFolders" class="min-h-[44px] px-6 rounded-full text-[14px] font-medium text-white bg-[#2D5BD9] hover:bg-[#244BB8] transition-colors inline-flex items-center gap-2 cursor-pointer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span>Importar pastas</span>
+      </button>
+      <input type="file" id="inputAll" webkitdirectory directory multiple class="hidden" aria-hidden="true">
+    </nav>
+  </header>
+
+  <main class="flex-1 w-full">
+
+    <!-- 2. HERO -->
+    <section class="max-w-[1240px] mx-auto px-5 sm:px-10 pt-[clamp(40px,8vw,88px)]">
+      <p id="heroEyebrow" class="text-[15px] text-[#5C5E62] mb-5">Resumo de 13 de novembro</p>
+      <h1 id="heroHeadline" class="text-[clamp(40px,6.4vw,88px)] font-light tracking-[-0.035em] leading-[1.02] max-w-[1000px] text-[#171A20]">
+        Carregando conciliação...
+      </h1>
+      <p id="heroSubline" class="mt-6 text-[18px] sm:text-[20px] leading-[1.5] text-[#5C5E62] max-w-[680px]">
+        -
+      </p>
+
+      <!-- Barra de busca (64px pílula) -->
+      <div class="mt-12 max-w-[820px] relative">
+        <label for="searchInput" class="sr-only">Buscar título</label>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5C5E62" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="absolute left-6 top-[22px] pointer-events-none">
+          <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+          id="searchInput"
+          type="text"
+          autocomplete="off"
+          placeholder="Nosso número, pagador, CPF/CNPJ ou linha digitável"
+          class="w-full h-16 rounded-full bg-[#F5F5F3] border-0 pl-[58px] pr-[112px] text-[16px] sm:text-[17px] text-[#171A20] placeholder-[#5C5E62] transition-colors"
+        >
+        <div class="absolute right-3 top-[10px] flex items-center gap-2">
+          <button type="button" id="btnClearSearch" class="hidden min-h-[44px] px-4 rounded-full text-[14px] font-medium text-[#171A20] hover:bg-[#EBEBE8] transition-colors items-center cursor-pointer">
+            Limpar
+          </button>
+          <span id="searchShortcutHint" aria-hidden="true" class="text-[13px] text-[#5C5E62] pr-3 select-none hidden sm:inline">⌘ K</span>
+        </div>
+      </div>
+
+      <!-- Decodificação FEBRABAN discreta -->
+      <div id="decodedBarcodeStrip" class="hidden mt-4 max-w-[820px] bg-[#F5F5F3] rounded-[16px] px-6 py-4 flex-wrap gap-x-8 gap-y-2 text-[14px] leading-[1.5]">
+        <span id="decTipoLabel" class="font-semibold text-[#171A20]">Linha digitável reconhecida</span>
+        <span class="text-[#5C5E62]">Banco <strong id="decBanco" class="text-[#171A20] font-medium">-</strong></span>
+        <span class="text-[#5C5E62]">Campo livre <span id="decCampoLivre" class="font-mono text-[13px] text-[#171A20] tabular-nums break-all">-</span></span>
+        <span class="text-[#5C5E62]">Nosso número <strong id="decNossoNumero" class="font-mono text-[13px] font-medium text-[#171A20] tabular-nums">-</strong></span>
+      </div>
+
+      <!-- Chips rápidos -->
+      <div id="heroChips" class="mt-5 flex flex-wrap gap-2 max-w-[820px]">
+        <button type="button" class="hero-chip min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] text-[#171A20] hover:bg-[#EBEBE8] transition-colors cursor-pointer" data-chip-filter="rejeitados" aria-pressed="false">
+          Rejeitados
+        </button>
+        <button type="button" class="hero-chip min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] text-[#171A20] hover:bg-[#EBEBE8] transition-colors cursor-pointer" data-chip-filter="sem_retorno" aria-pressed="false">
+          Sem retorno
+        </button>
+        <button type="button" class="hero-chip min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] text-[#171A20] hover:bg-[#EBEBE8] transition-colors cursor-pointer" data-chip-filter="semana" aria-pressed="false">
+          Vencem em 7 dias
+        </button>
+        <button type="button" id="btnSampleLd" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] text-[#171A20] hover:bg-[#EBEBE8] transition-colors cursor-pointer" aria-pressed="false">
+          Colar linha digitável de exemplo
+        </button>
+      </div>
+    </section>
+
+    <!-- 3. LINHA FINA DE STATUS DE IMPORTAÇÃO -->
+    <section aria-label="Arquivos carregados" class="max-w-[1240px] mx-auto px-5 sm:px-10 pt-[72px]">
+      <div class="flex flex-wrap border-t border-b border-[#E6E6E4]">
+        <div id="dropRem" class="drop-cell flex-1 min-w-[280px] flex items-center justify-between gap-4 py-5 md:pr-8">
+          <input type="file" id="inputRem" webkitdirectory directory multiple class="hidden" aria-hidden="true">
+          <div class="min-w-0">
+            <div class="text-[13px] text-[#5C5E62]">Remessas</div>
+            <div id="countRem" class="mt-1 text-[16px] font-medium text-[#171A20] tabular-nums truncate">Nenhum arquivo carregado</div>
+            <div class="mt-0.5 text-[12px] text-[#5C5E62] font-mono">.CRM · .REM · .002</div>
+          </div>
+          <button type="button" id="btnPickDirRem" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[#171A20] transition-colors flex-shrink-0 cursor-pointer">
+            <span id="labelPickRem">Selecionar pasta</span>
+          </button>
+        </div>
+
+        <div id="dropRet" class="drop-cell flex-1 min-w-[280px] flex items-center justify-between gap-4 py-5 border-t border-[#E6E6E4] md:border-t-0 md:border-l md:pl-8">
+          <input type="file" id="inputRet" webkitdirectory directory multiple class="hidden" aria-hidden="true">
+          <div class="min-w-0">
+            <div class="text-[13px] text-[#5C5E62]">Retornos</div>
+            <div id="countRet" class="mt-1 text-[16px] font-medium text-[#171A20] tabular-nums truncate">Nenhum arquivo carregado</div>
+            <div class="mt-0.5 text-[12px] text-[#5C5E62] font-mono">.CRT · .R02–.R99 · .RET</div>
+          </div>
+          <button type="button" id="btnPickDirRet" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[#171A20] transition-colors flex-shrink-0 cursor-pointer">
+            <span id="labelPickRet">Selecionar pasta</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Barra de progresso em lotes -->
+      <div id="progressWrap" class="hidden mt-4 bg-[#F5F5F3] rounded-[16px] px-5 py-3 flex-col gap-2">
+        <div class="flex items-center justify-between text-[13px] text-[#5C5E62]">
+          <span id="progressText">Processando arquivos em lotes (ISO-8859-1)...</span>
+          <span id="progressPct" class="font-mono tabular-nums font-medium text-[#171A20]">0%</span>
+        </div>
+        <div class="w-full h-1 bg-[#E6E6E4] rounded-full overflow-hidden">
+          <div id="progressFill" class="h-full bg-[#2D5BD9] transition-all duration-150 rounded-full" style="width: 0%;"></div>
+        </div>
+      </div>
+
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-[13px] text-[#5C5E62]">
+        <p class="m-0">
+          Ou solte os arquivos em qualquer lugar da página.
+          <span id="sessionStatusHint">Dados de exemplo carregados.</span>
+        </p>
+        <button type="button" id="btnResetSession" class="min-h-[44px] px-4 -my-2 rounded-full text-[13px] font-medium text-[#5C5E62] hover:text-[#171A20] hover:bg-[#F5F5F3] transition-colors cursor-pointer">
+          Limpar sessão
+        </button>
+      </div>
+    </section>
+
+    <!-- 4. QUATRO NÚMEROS GRANDES (FILTROS) + BARRA EMPILHADA -->
+    <section aria-label="Indicadores" class="max-w-[1240px] mx-auto px-5 sm:px-10 pt-[72px]">
+      <div class="flex flex-wrap gap-x-10 gap-y-2" role="group" aria-label="Filtrar por situação">
+        <button type="button" class="kpi-cell active-kpi flex-1 min-w-[200px] pt-5 pb-3 text-left flex flex-col gap-1 border-t-2 border-[#171A20] cursor-pointer" data-kpi-filter="todos" aria-pressed="true">
+          <span class="text-[14px] text-[#5C5E62]">Conciliados</span>
+          <span id="statTotalRem" class="text-[clamp(44px,5.2vw,72px)] font-light tracking-[-0.04em] leading-[1.05] tabular-nums text-[#171A20]">0</span>
+          <span id="volTotalRem" class="text-[17px] font-medium tabular-nums text-[#171A20]">R$ 0,00</span>
+          <span class="text-[13px] text-[#5C5E62]">Títulos únicos indexados</span>
+        </button>
+
+        <button type="button" class="kpi-cell flex-1 min-w-[200px] pt-5 pb-3 text-left flex flex-col gap-1 border-t-2 border-[#E6E6E4] cursor-pointer" data-kpi-filter="pagos" aria-pressed="false">
+          <span class="text-[14px] text-[#5C5E62]">Pagos</span>
+          <span id="statTotalPagos" class="text-[clamp(44px,5.2vw,72px)] font-light tracking-[-0.04em] leading-[1.05] tabular-nums text-[#171A20]">0</span>
+          <span id="volTotalPagos" class="text-[17px] font-medium tabular-nums text-[#171A20]">R$ 0,00</span>
+          <span class="text-[13px] text-[#5C5E62]">Liquidados (cód. 06)</span>
+        </button>
+
+        <button type="button" class="kpi-cell flex-1 min-w-[200px] pt-5 pb-3 text-left flex flex-col gap-1 border-t-2 border-[#E6E6E4] cursor-pointer" data-kpi-filter="confirmados" aria-pressed="false">
+          <span class="text-[14px] text-[#5C5E62]">Confirmados</span>
+          <span id="statTotalConf" class="text-[clamp(44px,5.2vw,72px)] font-light tracking-[-0.04em] leading-[1.05] tabular-nums text-[#171A20]">0</span>
+          <span id="volTotalConf" class="text-[17px] font-medium tabular-nums text-[#171A20]">R$ 0,00</span>
+          <span class="text-[13px] text-[#5C5E62]">Registrados em carteira (cód. 02)</span>
+        </button>
+
+        <button type="button" class="kpi-cell flex-1 min-w-[200px] pt-5 pb-3 text-left flex flex-col gap-1 border-t-2 border-[#E6E6E4] cursor-pointer" data-kpi-filter="pendencias" aria-pressed="false">
+          <span class="text-[14px] text-[#5C5E62]">Pendências</span>
+          <span id="statTotalOrfaos" class="text-[clamp(44px,5.2vw,72px)] font-light tracking-[-0.04em] leading-[1.05] tabular-nums text-[#171A20]">0</span>
+          <span id="volTotalOrfaos" class="text-[17px] font-medium tabular-nums text-[#171A20]">R$ 0,00</span>
+          <span id="breakdownOrfaos" class="text-[13px] text-[#5C5E62] tabular-nums">0 sem retorno · 0 rejeitados</span>
+        </button>
+      </div>
+
+      <!-- Barra fina empilhada + legenda -->
+      <div id="distributionBarWrap" class="mt-8" role="img" aria-label="Distribuição dos títulos">
+        <div id="distributionBar" class="flex gap-[3px] h-2"></div>
+        <div id="distributionLegend" class="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-[#5C5E62]"></div>
+      </div>
+    </section>
+
+    <!-- 5. ATENÇÃO AGORA + ALERTA DE NSA -->
+    <section id="attentionSection" aria-label="Atenção agora" class="max-w-[1240px] mx-auto px-5 sm:px-10 pt-[96px]">
+      <div id="attentionHeaderWrap">
+        <div class="flex items-baseline justify-between flex-wrap gap-3 mb-6">
+          <h2 class="text-[28px] sm:text-[32px] font-normal tracking-[-0.02em] text-[#171A20] m-0">Atenção agora</h2>
+          <button type="button" id="btnVerPendencias" class="min-h-[44px] inline-flex items-center text-[14px] font-medium text-[#2D5BD9] hover:underline cursor-pointer">
+            Ver pendências →
+          </button>
+        </div>
+
+        <div id="attentionGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <div id="alertsPanel" aria-label="Alertas de sequência" class="hidden mt-4 flex-col gap-3"></div>
+    </section>
+
+    <!-- 6 & 7. LISTA DE TÍTULOS COM EXPANSÃO INLINE -->
+    <section id="ledger" aria-label="Títulos" class="max-w-[1240px] mx-auto px-5 sm:px-10 pt-[96px]">
+      <div class="flex items-end justify-between flex-wrap gap-4 mb-6">
+        <div>
+          <h2 id="listTitle" class="text-[28px] sm:text-[32px] font-normal tracking-[-0.02em] text-[#171A20] m-0">Todos os títulos</h2>
+          <p id="listCount" class="mt-1.5 text-[14px] text-[#5C5E62] m-0">0 títulos</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Controle de densidade -->
+          <div class="inline-flex items-center bg-[#F5F5F3] rounded-full p-1 min-h-[44px]" role="group" aria-label="Densidade da lista">
+            <button type="button" id="btnDensityComfortable" aria-pressed="true" class="min-h-[36px] px-4 rounded-full text-[13px] font-medium bg-[#FFFFFF] text-[#171A20] transition-colors cursor-pointer">
+              Confortável
+            </button>
+            <button type="button" id="btnDensityCompact" aria-pressed="false" class="min-h-[36px] px-4 rounded-full text-[13px] font-medium text-[#5C5E62] hover:text-[#171A20] transition-colors cursor-pointer">
+              Compacta
+            </button>
+          </div>
+
+          <button type="button" id="btnExportDivergencias" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[#171A20] transition-colors cursor-pointer">
+            Exportar divergências
+          </button>
+          <button type="button" id="btnExportCsv" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[#171A20] transition-colors cursor-pointer">
+            CSV
+          </button>
+          <button type="button" id="btnExportJson" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[#171A20] transition-colors cursor-pointer">
+            JSON
+          </button>
+        </div>
+      </div>
+
+      <!-- Rótulos das colunas (desktop/tablet) -->
+      <div class="hidden md:flex flex-wrap items-center gap-x-6 gap-y-2 px-2 pb-3 text-[12px] text-[#5C5E62] tracking-[0.02em]">
+        <span class="flex-[1_1_150px] min-w-0">Nosso número</span>
+        <span class="flex-[3_1_240px] min-w-0">Pagador</span>
+        <span class="flex-[1_1_130px] min-w-0 text-right">Valor</span>
+        <span class="flex-[1.2_1_150px] min-w-0">Vencimento</span>
+        <span class="flex-[1.4_1_160px] min-w-0">Status</span>
+        <span class="flex-[0_0_20px]"></span>
+      </div>
+
+      <div id="listBody">
+        <!-- Populated dynamically -->
+      </div>
+      <div class="border-t border-[#E6E6E4]"></div>
+
+      <!-- Paginação -->
+      <div id="paginationBar" class="hidden mt-6 flex-col sm:flex-row items-center justify-between gap-3 text-[13px] text-[#5C5E62]">
+        <span id="paginationInfo" class="tabular-nums">Mostrando 0 de 0</span>
+        <div class="flex items-center gap-3">
+          <button type="button" id="btnPrevPage" class="min-h-[44px] px-5 rounded-full bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[14px] font-medium text-[#171A20] disabled:opacity-40 disabled:pointer-events-none inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+            Anterior
+          </button>
+          <span id="pageIndicator" class="tabular-nums px-1 text-[13px] text-[#5C5E62]">Página 1 de 1</span>
+          <button type="button" id="btnNextPage" class="min-h-[44px] px-5 rounded-full bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[14px] font-medium text-[#171A20] disabled:opacity-40 disabled:pointer-events-none inline-flex items-center gap-1.5 transition-colors cursor-pointer">
+            Próxima
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 8. RODAPÉ -->
+  <footer class="max-w-[1240px] w-full mx-auto px-5 sm:px-10 pt-[96px] pb-12">
+    <div class="border-t border-[#E6E6E4] pt-6 flex flex-wrap justify-between gap-x-8 gap-y-3 text-[13px] text-[#5C5E62] leading-[1.5]">
+      <span>Sicredi (748) · Cresol (133) · Caixa Econômica (104) · Santander (033) · Safra (422) · Sicoob (756) · Banco do Brasil (001) · Bradesco (237) · Itaú (341)</span>
+      <span>Tudo roda no seu navegador. Os arquivos não saem do computador.</span>
+    </div>
+  </footer>
+
+  <!-- Toast de confirmação -->
+  <div id="toastBanner" role="status" aria-live="polite" class="fixed bottom-5 right-5 z-50 hidden items-center gap-2.5 bg-[#171A20] text-white rounded-full px-5 py-3 text-[13px] font-medium">
+    <svg class="w-4 h-4 text-[#4ADE80] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+    <span id="toastText">Concluído</span>
+  </div>
+
+  <script>
+    /**
+     * =========================================================================
+     * CnabParser v3.0 — Motor Universal Multi-Bancos (CNAB 400 & CNAB 240)
+     * =========================================================================
+     */
+    const CnabParser = (function () {
+      const OCORRENCIAS_PADRAO = {
+        '02': { label: 'Entrada Confirmada', tipo: 'registrado', desc: 'Boleto registrado com sucesso na carteira do banco' },
+        '03': { label: 'Entrada Rejeitada', tipo: 'rejeitado', desc: 'Recusado pelo banco — verifique o motivo detalhado' },
+        '06': { label: 'Liquidação Normal (PAGO)', tipo: 'pago', desc: 'Boleto quitado pelo pagador' },
+        '09': { label: 'Baixa de Título', tipo: 'baixado', desc: 'Boleto baixado/cancelado da carteira' },
+        '10': { label: 'Baixa Solicitada', tipo: 'pendente', desc: 'Baixa solicitada pelo cedente' },
+        '14': { label: 'Alteração de Vencimento', tipo: 'alterado', desc: 'Vencimento atualizado no banco' },
+        '15': { label: 'Liquidação em Cartório', tipo: 'pago', desc: 'Quitado via cartório' },
+        '17': { label: 'Liquidação após Baixa', tipo: 'pago', desc: 'Quitado após baixa prévia' },
+        '24': { label: 'Rejeitado por CEP', tipo: 'rejeitado', desc: 'CEP do pagador inválido ou não encontrado' },
+        '26': { label: 'Instrução Rejeitada', tipo: 'rejeitado', desc: 'Alteração/instrução recusada pelo banco' },
+        '28': { label: 'Débito de Tarifas / Custas', tipo: 'tarifa', desc: 'Cobrança de tarifa bancária sobre o título' },
+        '30': { label: 'Alteração de Dados Rejeitada', tipo: 'rejeitado', desc: 'Alteração cadastral recusada' }
+      };
+
+      const MOTIVOS_OCORRENCIA = {
+        '01': 'Código do banco inválido',
+        '02': 'Código do registro detalhe inválido',
+        '03': 'Código do segmento inválido / Ocorrência inválida',
+        '04': 'Código de movimento não permitido para carteira',
+        '05': 'Código de movimento inválido',
+        '06': 'Tipo/Número de inscrição (CPF/CNPJ) do pagador inválido',
+        '07': 'Agência/Conta/DV inválido',
+        '08': 'Nosso Número inválido',
+        '09': 'Nosso Número duplicado',
+        '10': 'Carteira inválida',
+        '11': 'Forma de cadastramento do título inválida',
+        '12': 'Tipo de documento inválido',
+        '13': 'Identificação da emissão do bloqueto inválida',
+        '14': 'Identificação da distribuição do bloqueto inválida',
+        '15': 'Características da cobrança incompatíveis',
+        '16': 'Data de vencimento inválida',
+        '17': 'Data de vencimento anterior à data de emissão',
+        '18': 'Vencimento fora do prazo de operação',
+        '20': 'Valor do título inválido',
+        '21': 'Espécie do título inválida',
+        '24': 'Data da emissão inválida',
+        '26': 'Código de juros de mora inválido',
+        '27': 'Valor/Taxa de juros de mora inválido',
+        '28': 'Código de desconto inválido',
+        '42': 'Código para baixa/devolução inválido',
+        '44': 'Código da moeda inválido',
+        '45': 'Nome do pagador não informado',
+        '46': 'Tipo/Número de inscrição do pagador não informado',
+        '47': 'Endereço do pagador não informado',
+        '48': 'CEP inválido',
+        '49': 'CEP sem praça de cobrança',
+        '50': 'CEP referente a um Banco Correspondente',
+        '52': 'Unidade da Federação (UF) inválida',
+        '60': 'Movimento para título não cadastrado',
+        '63': 'Entrada para título já cadastrado',
+        'A1': 'Praça do pagador não cadastrada',
+        'A2': 'Tipo de cobrança do título divergente com a cooperativa',
+        'B1': 'Tarifa de registro de título',
+        'B3': 'Tarifa de liquidação de título',
+        'H5': 'Liquidação via compensação interbancária (COMPE)'
+      };
+
+      const BANK_DRIVERS = {
+        '748': {
+          nome: 'Sicredi',
+          sigla: 'SICREDI',
+          extrairHeader400: (h) => ({
+            agencia: h.slice(26, 31).trim(),
+            cedente: h.slice(31, 45).trim(),
+            dataGravacao: h.slice(94, 102).trim(),
+            nsa: h.slice(110, 117).trim()
+          }),
+          extrairNossoNumero400: (line) => {
+            const raw = line.slice(47, 56).trim();
+            const clean = raw.replace(/\D/g, '');
+            if (clean.length === 9) {
+              const ano = clean.slice(0, 2);
+              const seq = clean.slice(2, 8);
+              const dv = clean.slice(8, 9);
+              return { raw: clean, sequencial: seq, formatado: `${ano}/${seq}-${dv}` };
+            }
+            return { raw: clean, sequencial: clean, formatado: clean };
+          },
+          extrairNossoNumero240: (line) => {
+            const raw = line.slice(37, 57).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw, sequencial: semZeros, formatado: semZeros };
+          },
+          extrairCampoLivreLinhaDigitavel: (campoLivre) => campoLivre.slice(2, 11).replace(/\D/g, '')
+        },
+        '133': {
+          nome: 'Cresol',
+          sigla: 'CRESOL',
+          extrairHeader240: (h) => ({
+            agencia: h.slice(52, 57).trim(),
+            cedente: h.slice(18, 32).trim(),
+            dataGravacao: h.slice(143, 151).trim(),
+            nsa: h.slice(157, 163).trim()
+          }),
+          extrairNossoNumero240: (line) => {
+            const raw = line.slice(36, 57).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          },
+          extrairNossoNumero400: (line) => {
+            const raw = line.slice(62, 73).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          }
+        },
+        '104': {
+          nome: 'Caixa Econômica',
+          sigla: 'CAIXA',
+          extrairHeader240: (h) => ({
+            agencia: h.slice(52, 57).trim(),
+            cedente: h.slice(18, 32).trim(),
+            dataGravacao: h.slice(143, 151).trim(),
+            nsa: h.slice(157, 163).trim()
+          }),
+          extrairNossoNumero240: (line) => {
+            const raw = line.slice(40, 57).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            const mod = raw.slice(0, 2);
+            const corpo = raw.slice(2).replace(/^0+/, '') || raw.slice(2);
+            return { raw: semZeros, sequencial: corpo, formatado: mod ? `${mod}/${corpo}` : semZeros };
+          },
+          extrairNossoNumero400: (line) => {
+            const raw = line.slice(56, 73).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          }
+        },
+        '033': {
+          nome: 'Santander',
+          sigla: 'SANTANDER',
+          extrairHeader240: (h) => ({
+            agencia: h.slice(32, 36).trim(),
+            cedente: h.slice(18, 32).trim(),
+            dataGravacao: h.slice(143, 151).trim(),
+            nsa: h.slice(157, 163).trim()
+          }),
+          extrairNossoNumero240: (line) => {
+            const raw = line.slice(40, 53).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          },
+          extrairNossoNumero400: (line) => {
+            const raw = line.slice(62, 70).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          },
+          extrairCampoLivreLinhaDigitavel: (campoLivre) => campoLivre.slice(8, 21).replace(/^0+/, '')
+        },
+        '422': {
+          nome: 'Banco Safra',
+          sigla: 'SAFRA',
+          extrairHeader240: (h) => ({
+            agencia: h.slice(52, 57).trim(),
+            cedente: h.slice(18, 32).trim(),
+            dataGravacao: h.slice(143, 151).trim(),
+            nsa: h.slice(157, 163).trim()
+          }),
+          extrairNossoNumero240: (line) => {
+            const raw = line.slice(37, 57).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          },
+          extrairNossoNumero400: (line) => {
+            const raw = line.slice(62, 71).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          }
+        },
+        '756': {
+          nome: 'Sicoob',
+          sigla: 'SICOOB',
+          extrairNossoNumero240: (line) => {
+            const raw = line.slice(37, 47).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          },
+          extrairNossoNumero400: (line) => {
+            const raw = line.slice(62, 74).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          }
+        },
+        '001': {
+          nome: 'Banco do Brasil',
+          sigla: 'BB',
+          extrairNossoNumero240: (line) => {
+            const raw = line.slice(37, 57).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          },
+          extrairNossoNumero400: (line) => {
+            const raw = line.slice(63, 80).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          }
+        },
+        '237': {
+          nome: 'Bradesco',
+          sigla: 'BRADESCO',
+          extrairNossoNumero400: (line) => {
+            const raw = line.slice(70, 82).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          },
+          extrairNossoNumero240: (line) => {
+            const raw = line.slice(37, 57).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          }
+        },
+        '341': {
+          nome: 'Itaú',
+          sigla: 'ITAU',
+          extrairNossoNumero400: (line) => {
+            const raw = line.slice(62, 70).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          },
+          extrairNossoNumero240: (line) => {
+            const raw = line.slice(37, 57).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          }
+        }
+      };
+
+      function getDriver(codBanco) {
+        return BANK_DRIVERS[codBanco] || {
+          nome: `Banco ${codBanco}`,
+          sigla: `BCO_${codBanco}`,
+          extrairNossoNumero400: (line) => {
+            const raw = line.slice(47, 56).trim().replace(/\D/g, '');
+            return { raw, sequencial: raw, formatado: raw };
+          },
+          extrairNossoNumero240: (line) => {
+            const raw = line.slice(37, 57).trim().replace(/\D/g, '');
+            const semZeros = raw.replace(/^0+/, '') || raw;
+            return { raw: semZeros, sequencial: semZeros, formatado: semZeros };
+          }
+        };
+      }
+
+      function formatarData(str) {
+        if (!str) return '-';
+        const s = str.trim();
+        if (!s || /^0+$/.test(s)) return '-';
+        if (s.length === 6) return `${s.slice(0, 2)}/${s.slice(2, 4)}/20${s.slice(4, 6)}`;
+        if (s.length === 8) {
+          if (parseInt(s.slice(0, 4), 10) > 1990 && parseInt(s.slice(0, 4), 10) < 2100) {
+            return `${s.slice(6, 8)}/${s.slice(4, 6)}/${s.slice(0, 4)}`;
+          }
+          return `${s.slice(0, 2)}/${s.slice(2, 4)}/${s.slice(4, 8)}`;
+        }
+        return s;
+      }
+
+      function dataParaISO(dataBR) {
+        if (!dataBR || dataBR === '-' || dataBR.length !== 10) return '';
+        const [d, m, y] = dataBR.split('/');
+        return `${y}-${m}-${d}`;
+      }
+
+      function formatarValor(str) {
+        if (!str) return 0;
+        const clean = str.trim().replace(/\D/g, '');
+        const num = parseInt(clean, 10);
+        return isNaN(num) ? 0 : num / 100;
+      }
+
+      function formatarMoeda(val) {
+        return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      }
+
+      function formatarCpfCnpj(doc) {
+        const d = String(doc || '').replace(/\D/g, '');
+        if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+        if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+        return doc || '-';
+      }
+
+      function traduzirMotivos(blocoMotivos) {
+        if (!blocoMotivos) return [];
+        const s = blocoMotivos.trim();
+        const motivos = [];
+        for (let i = 0; i + 2 <= s.length; i += 2) {
+          const cod = s.slice(i, i + 2).trim();
+          if (cod && cod !== '00' && cod !== '  ') {
+            const desc = MOTIVOS_OCORRENCIA[cod] || `Código de motivo ${cod}`;
+            motivos.push({ codigo: cod, descricao: desc });
+          }
+        }
+        return motivos;
+      }
+
+      function decodificarLinhaDigitavel(input) {
+        const digits = String(input || '').replace(/\D/g, '');
+        if (digits.length !== 47 && digits.length !== 44) {
+          return { ehLinhaDigitavel: false };
+        }
+        const codBanco = digits.slice(0, 3);
+        const campoLivre = digits.length === 47
+          ? digits.slice(4, 9) + digits.slice(10, 20) + digits.slice(21, 31)
+          : digits.slice(19, 44);
+
+        const driver = getDriver(codBanco);
+        const nossoNumeroExtraido = driver.extrairCampoLivreLinhaDigitavel
+          ? driver.extrairCampoLivreLinhaDigitavel(campoLivre)
+          : campoLivre;
+
+        return {
+          ehLinhaDigitavel: true,
+          tipoEntrada: digits.length === 47 ? 'Linha Digitável (47d)' : 'Código de Barras (44d)',
+          codBanco,
+          bancoNome: driver.nome,
+          campoLivre,
+          nossoNumeroExtraido
+        };
+      }
+
+      function identificarArquivo(content) {
+        if (!content) return null;
+        const lines = content.split(/\r?\n/).filter(l => l.trim().length > 0);
+        if (lines.length < 2) return null;
+        const firstLine = lines[0];
+
+        if (firstLine.length >= 230 && /^\d{3}00000/.test(firstLine)) {
+          const codBanco = firstLine.slice(0, 3);
+          const tipoOp = firstLine.slice(142, 143) === '2' ? 'RETORNO' : 'REMESSA';
+          const driver = getDriver(codBanco);
+          return { layout: 'CNAB 240', tipoOperacao: tipoOp, codBanco, bancoNome: driver.nome, driver, linhas: lines };
+        }
+
+        if (firstLine.length >= 380 && (firstLine.startsWith('01REMESSA') || firstLine.startsWith('02RETORNO'))) {
+          const tipoOp = firstLine.startsWith('02') ? 'RETORNO' : 'REMESSA';
+          let codBanco = firstLine.slice(76, 79).trim();
+          if (!/^\d{3}$/.test(codBanco)) codBanco = '748';
+          const driver = getDriver(codBanco);
+          return { layout: 'CNAB 400', tipoOperacao: tipoOp, codBanco, bancoNome: driver.nome, driver, linhas: lines };
+        }
+        return null;
+      }
+
+      function parseArquivo(content, fileName) {
+        const meta = identificarArquivo(content);
+        if (!meta) return null;
+        if (meta.tipoOperacao === 'REMESSA') {
+          return meta.layout === 'CNAB 240' ? parseRemessa240(meta, fileName) : parseRemessa400(meta, fileName);
+        } else {
+          return meta.layout === 'CNAB 240' ? parseRetorno240(meta, fileName) : parseRetorno400(meta, fileName);
+        }
+      }
+
+      function parseRemessa400(meta, fileName) {
+        const header = meta.linhas[0];
+        const hInfo = meta.driver.extrairHeader400
+          ? meta.driver.extrairHeader400(header)
+          : { agencia: header.slice(26, 31).trim(), cedente: header.slice(31, 45).trim(), dataGravacao: header.slice(94, 102).trim(), nsa: header.slice(110, 117).trim() };
+
+        const dataGravacao = formatarData(hInfo.dataGravacao);
+        const boletos = [];
+
+        for (let i = 1; i < meta.linhas.length; i++) {
+          const line = meta.linhas[i];
+          if (line[0] !== '1') continue;
+
+          const nn = meta.driver.extrairNossoNumero400(line);
+          const dataVencimento = formatarData(line.slice(120, 126));
+          const valor = formatarValor(line.slice(126, 139));
+          const cpfCnpj = line.slice(220, 234).trim().replace(/^0+/, '');
+          const nomeSacado = line.slice(234, 274).trim();
+          const chaveComposta = `${meta.codBanco}_${hInfo.agencia || '00000'}_${nn.raw}`;
+
+          boletos.push({
+            chaveComposta,
+            nossoNumeroRaw: nn.raw,
+            nossoNumeroFormatado: nn.formatado,
+            sequencial: nn.sequencial,
+            nomeSacado,
+            cpfCnpj,
+            valor,
+            valorFormatado: formatarMoeda(valor),
+            dataVencimento,
+            arquivoOrigem: fileName,
+            linhaArquivo: i + 1,
+            banco: meta.codBanco,
+            bancoNome: meta.bancoNome,
+            agencia: hInfo.agencia,
+            cedente: hInfo.cedente,
+            layout: 'CNAB 400',
+            dataRemessa: dataGravacao,
+            dataRemessaISO: dataParaISO(dataGravacao)
+          });
+        }
+
+        return {
+          tipo: 'REMESSA',
+          arquivo: fileName,
+          layout: 'CNAB 400',
+          banco: meta.codBanco,
+          bancoNome: meta.bancoNome,
+          agencia: hInfo.agencia,
+          cedente: hInfo.cedente,
+          nsa: parseInt(hInfo.nsa, 10) || null,
+          nsaRaw: hInfo.nsa,
+          dataGravacao,
+          dataISO: dataParaISO(dataGravacao),
+          totalBoletos: boletos.length,
+          boletos
+        };
+      }
+
+      function parseRemessa240(meta, fileName) {
+        const header = meta.linhas[0];
+        const hInfo = meta.driver.extrairHeader240
+          ? meta.driver.extrairHeader240(header)
+          : { agencia: header.slice(52, 57).trim(), cedente: header.slice(18, 32).trim(), dataGravacao: header.slice(143, 151).trim(), nsa: header.slice(157, 163).trim() };
+
+        const dataGravacao = formatarData(hInfo.dataGravacao);
+        const boletos = [];
+        let segP = null;
+
+        for (let i = 1; i < meta.linhas.length; i++) {
+          const line = meta.linhas[i];
+          if (line[7] !== '3') continue;
+          const seg = line[13];
+
+          if (seg === 'P') {
+            const nn = meta.driver.extrairNossoNumero240(line);
+            const dataVencimento = formatarData(line.slice(77, 85));
+            const valor = formatarValor(line.slice(85, 100));
+            segP = { nn, dataVencimento, valor, linhaArquivo: i + 1 };
+          } else if (seg === 'Q' && segP) {
+            const cpfCnpj = line.slice(18, 33).trim().replace(/^0+/, '');
+            const nomeSacado = line.slice(33, 73).trim();
+            const chaveComposta = `${meta.codBanco}_${hInfo.agencia || '00000'}_${segP.nn.raw}`;
+
+            boletos.push({
+              chaveComposta,
+              nossoNumeroRaw: segP.nn.raw,
+              nossoNumeroFormatado: segP.nn.formatado,
+              sequencial: segP.nn.sequencial,
+              nomeSacado,
+              cpfCnpj,
+              valor: segP.valor,
+              valorFormatado: formatarMoeda(segP.valor),
+              dataVencimento: segP.dataVencimento,
+              arquivoOrigem: fileName,
+              linhaArquivo: segP.linhaArquivo,
+              banco: meta.codBanco,
+              bancoNome: meta.bancoNome,
+              agencia: hInfo.agencia,
+              cedente: hInfo.cedente,
+              layout: 'CNAB 240',
+              dataRemessa: dataGravacao,
+              dataRemessaISO: dataParaISO(dataGravacao)
+            });
+            segP = null;
+          }
+        }
+
+        return {
+          tipo: 'REMESSA',
+          arquivo: fileName,
+          layout: 'CNAB 240',
+          banco: meta.codBanco,
+          bancoNome: meta.bancoNome,
+          agencia: hInfo.agencia,
+          cedente: hInfo.cedente,
+          nsa: parseInt(hInfo.nsa, 10) || null,
+          nsaRaw: hInfo.nsa,
+          dataGravacao,
+          dataISO: dataParaISO(dataGravacao),
+          totalBoletos: boletos.length,
+          boletos
+        };
+      }
+
+      function parseRetorno400(meta, fileName) {
+        const header = meta.linhas[0];
+        const hInfo = meta.driver.extrairHeader400
+          ? meta.driver.extrairHeader400(header)
+          : { agencia: header.slice(26, 31).trim(), cedente: header.slice(31, 45).trim(), dataGravacao: header.slice(94, 102).trim(), nsa: header.slice(110, 117).trim() };
+
+        const dataGravacao = formatarData(hInfo.dataGravacao);
+        const registros = [];
+
+        for (let i = 1; i < meta.linhas.length; i++) {
+          const line = meta.linhas[i];
+          if (line[0] !== '1') continue;
+
+          const nn = meta.driver.extrairNossoNumero400(line);
+          const codOcorrencia = line.slice(108, 110).trim();
+          const infoOcorr = OCORRENCIAS_PADRAO[codOcorrencia] || { label: `Ocorrência ${codOcorrencia}`, tipo: 'outros', desc: 'Movimentação bancária' };
+          const motivos = traduzirMotivos(line.slice(318, 328));
+          const dataOcorrencia = formatarData(line.slice(110, 116));
+          const dataVencimento = formatarData(line.slice(146, 152));
+          const valorTitulo = formatarValor(line.slice(152, 165));
+          const valorPago = formatarValor(line.slice(253, 266));
+          const dataCredito = formatarData(line.slice(328, 336));
+          const canal = line.slice(175, 185).trim() || 'Compensação';
+          const chaveComposta = `${meta.codBanco}_${hInfo.agencia || '00000'}_${nn.raw}`;
+
+          registros.push({
+            chaveComposta,
+            nossoNumeroRaw: nn.raw,
+            nossoNumeroFormatado: nn.formatado,
+            sequencial: nn.sequencial,
+            codOcorrencia,
+            ocorrenciaLabel: infoOcorr.label,
+            ocorrenciaTipo: infoOcorr.tipo,
+            ocorrenciaDesc: infoOcorr.desc,
+            motivos,
+            dataOcorrencia,
+            dataVencimento,
+            valorTitulo,
+            valorTituloFormatado: formatarMoeda(valorTitulo),
+            valorPago,
+            valorPagoFormatado: formatarMoeda(valorPago),
+            dataCredito,
+            canal,
+            banco: meta.codBanco,
+            bancoNome: meta.bancoNome,
+            agencia: hInfo.agencia,
+            cedente: hInfo.cedente,
+            layout: 'CNAB 400',
+            arquivoOrigem: fileName,
+            linhaArquivo: i + 1
+          });
+        }
+
+        return {
+          tipo: 'RETORNO',
+          arquivo: fileName,
+          layout: 'CNAB 400',
+          banco: meta.codBanco,
+          bancoNome: meta.bancoNome,
+          agencia: hInfo.agencia,
+          cedente: hInfo.cedente,
+          nsa: parseInt(hInfo.nsa, 10) || null,
+          nsaRaw: hInfo.nsa,
+          dataGravacao,
+          dataISO: dataParaISO(dataGravacao),
+          totalRegistros: registros.length,
+          registros
+        };
+      }
+
+      function parseRetorno240(meta, fileName) {
+        const header = meta.linhas[0];
+        const hInfo = meta.driver.extrairHeader240
+          ? meta.driver.extrairHeader240(header)
+          : { agencia: header.slice(52, 57).trim(), cedente: header.slice(18, 32).trim(), dataGravacao: header.slice(143, 151).trim(), nsa: header.slice(157, 163).trim() };
+
+        const dataGravacao = formatarData(hInfo.dataGravacao);
+        const registros = [];
+        let segT = null;
+
+        for (let i = 1; i < meta.linhas.length; i++) {
+          const line = meta.linhas[i];
+          if (line[7] !== '3') continue;
+          const seg = line[13];
+
+          if (seg === 'T') {
+            const codOcorrencia = line.slice(15, 17).trim();
+            const nn = meta.driver.extrairNossoNumero240(line);
+            const infoOcorr = OCORRENCIAS_PADRAO[codOcorrencia] || { label: `Ocorrência ${codOcorrencia}`, tipo: 'outros', desc: 'Movimento CNAB 240' };
+            const motivos = traduzirMotivos(line.slice(213, 223));
+            const dataVencimento = formatarData(line.slice(73, 81));
+            const valorTitulo = formatarValor(line.slice(81, 96));
+            segT = { nn, codOcorrencia, infoOcorr, motivos, dataVencimento, valorTitulo, linhaArquivo: i + 1 };
+          } else if (seg === 'U' && segT) {
+            const valorPago = formatarValor(line.slice(77, 92));
+            const dataOcorrencia = formatarData(line.slice(137, 145));
+            const dataCredito = formatarData(line.slice(145, 153));
+            const chaveComposta = `${meta.codBanco}_${hInfo.agencia || '00000'}_${segT.nn.raw}`;
+
+            registros.push({
+              chaveComposta,
+              nossoNumeroRaw: segT.nn.raw,
+              nossoNumeroFormatado: segT.nn.formatado,
+              sequencial: segT.nn.sequencial,
+              codOcorrencia: segT.codOcorrencia,
+              ocorrenciaLabel: segT.infoOcorr.label,
+              ocorrenciaTipo: segT.infoOcorr.tipo,
+              ocorrenciaDesc: segT.infoOcorr.desc,
+              motivos: segT.motivos,
+              dataOcorrencia,
+              dataVencimento: segT.dataVencimento,
+              valorTitulo: segT.valorTitulo,
+              valorTituloFormatado: formatarMoeda(segT.valorTitulo),
+              valorPago,
+              valorPagoFormatado: formatarMoeda(valorPago),
+              dataCredito,
+              canal: 'Eletrônico / COMPE',
+              banco: meta.codBanco,
+              bancoNome: meta.bancoNome,
+              agencia: hInfo.agencia,
+              cedente: hInfo.cedente,
+              layout: 'CNAB 240',
+              arquivoOrigem: fileName,
+              linhaArquivo: segT.linhaArquivo
+            });
+            segT = null;
+          }
+        }
+
+        return {
+          tipo: 'RETORNO',
+          arquivo: fileName,
+          layout: 'CNAB 240',
+          banco: meta.codBanco,
+          bancoNome: meta.bancoNome,
+          agencia: hInfo.agencia,
+          cedente: hInfo.cedente,
+          nsa: parseInt(hInfo.nsa, 10) || null,
+          nsaRaw: hInfo.nsa,
+          dataGravacao,
+          dataISO: dataParaISO(dataGravacao),
+          totalRegistros: registros.length,
+          registros
+        };
+      }
+
+      function cruzar(remessas, retornos) {
+        const mapaRetornos = new Map();
+        retornos.forEach(retFile => {
+          retFile.registros.forEach(ret => {
+            if (!mapaRetornos.has(ret.chaveComposta)) mapaRetornos.set(ret.chaveComposta, []);
+            mapaRetornos.get(ret.chaveComposta).push(ret);
+          });
+        });
+
+        const listaConciliada = [];
+        const chavesProcessadas = new Set();
+
+        remessas.forEach(remFile => {
+          remFile.boletos.forEach(bol => {
+            chavesProcessadas.add(bol.chaveComposta);
+            const encontrados = mapaRetornos.get(bol.chaveComposta) || [];
+            const retUnicos = [];
+            const seen = new Set();
+            encontrados.forEach(r => {
+              const sig = `${r.arquivoOrigem}-${r.linhaArquivo}-${r.codOcorrencia}`;
+              if (!seen.has(sig)) {
+                seen.add(sig);
+                retUnicos.push(r);
+              }
+            });
+
+            let statusFinal = 'SEM_RETORNO';
+            let statusLabel = 'Aguardando Retorno';
+            let statusClasse = 'pending';
+            let motivoRejeicao = '';
+
+            const temPago = retUnicos.find(r => ['06', '15', '17'].includes(r.codOcorrencia));
+            const temRegistrado = retUnicos.find(r => r.codOcorrencia === '02');
+            const temRejeitado = retUnicos.find(r => ['03', '24', '26', '30'].includes(r.codOcorrencia));
+
+            if (temPago) {
+              statusFinal = 'PAGO';
+              statusLabel = 'Quitado / Pago';
+              statusClasse = 'paid';
+            } else if (temRejeitado) {
+              statusFinal = 'REJEITADO';
+              statusLabel = 'Rejeitado pelo Banco';
+              statusClasse = 'rejected';
+              if (temRejeitado.motivos && temRejeitado.motivos.length > 0) {
+                motivoRejeicao = temRejeitado.motivos.map(m => `${m.codigo}: ${m.descricao}`).join(' | ');
+              }
+            } else if (temRegistrado) {
+              statusFinal = 'CONFIRMADO';
+              statusLabel = 'Entrada Confirmada';
+              statusClasse = 'registered';
+            }
+
+            listaConciliada.push({
+              chaveComposta: bol.chaveComposta,
+              nossoNumeroRaw: bol.nossoNumeroRaw,
+              nossoNumeroFormatado: bol.nossoNumeroFormatado,
+              sequencial: bol.sequencial,
+              nomeSacado: bol.nomeSacado,
+              cpfCnpj: bol.cpfCnpj,
+              valor: bol.valor,
+              valorFormatado: bol.valorFormatado,
+              dataVencimento: bol.dataVencimento,
+              banco: bol.banco,
+              bancoNome: bol.bancoNome,
+              agencia: bol.agencia,
+              cedente: bol.cedente,
+              layout: bol.layout,
+              arquivoRemessa: bol.arquivoOrigem,
+              linhaRemessa: bol.linhaArquivo,
+              dataRemessa: bol.dataRemessa,
+              status: statusFinal,
+              statusLabel,
+              statusClasse,
+              motivoRejeicao,
+              retornos: retUnicos
+            });
+          });
+        });
+
+        retornos.forEach(retFile => {
+          retFile.registros.forEach(ret => {
+            if (!chavesProcessadas.has(ret.chaveComposta)) {
+              chavesProcessadas.add(ret.chaveComposta);
+              let statusFinal = 'AVULSO';
+              let statusLabel = ret.ocorrenciaLabel;
+              let statusClasse = 'tariff';
+              let motivoRejeicao = '';
+
+              if (['06', '15', '17'].includes(ret.codOcorrencia)) {
+                statusFinal = 'PAGO';
+                statusLabel = 'Quitado / Pago';
+                statusClasse = 'paid';
+              } else if (ret.codOcorrencia === '02') {
+                statusFinal = 'CONFIRMADO';
+                statusLabel = 'Entrada Confirmada';
+                statusClasse = 'registered';
+              } else if (['03', '24', '26', '30'].includes(ret.codOcorrencia)) {
+                statusFinal = 'REJEITADO';
+                statusLabel = 'Rejeitado pelo Banco';
+                statusClasse = 'rejected';
+                motivoRejeicao = (ret.motivos || []).map(m => `${m.codigo}: ${m.descricao}`).join(' | ');
+              }
+
+              listaConciliada.push({
+                chaveComposta: ret.chaveComposta,
+                nossoNumeroRaw: ret.nossoNumeroRaw,
+                nossoNumeroFormatado: ret.nossoNumeroFormatado,
+                sequencial: ret.sequencial,
+                nomeSacado: '(Remessa não carregada no lote)',
+                cpfCnpj: '-',
+                valor: ret.valorTitulo,
+                valorFormatado: ret.valorTituloFormatado,
+                dataVencimento: ret.dataVencimento,
+                banco: ret.banco,
+                bancoNome: ret.bancoNome,
+                agencia: ret.agencia,
+                cedente: ret.cedente,
+                layout: ret.layout,
+                arquivoRemessa: 'Remessa Ausente',
+                linhaRemessa: '-',
+                dataRemessa: '-',
+                status: statusFinal,
+                statusLabel,
+                statusClasse,
+                motivoRejeicao,
+                retornos: [ret]
+              });
+            }
+          });
+        });
+
+        return listaConciliada;
+      }
+
+      function auditarLacunas(remessas, retornos) {
+        const alertas = [];
+        if (remessas.length === 0 && retornos.length === 0) return alertas;
+
+        const gruposRet = new Map();
+        retornos.forEach(r => {
+          const k = `${r.bancoNome} (${r.banco}) — Ag/Coop ${r.agencia || 'N/A'}`;
+          if (!gruposRet.has(k)) gruposRet.set(k, []);
+          if (r.nsa) gruposRet.get(k).push(r);
+        });
+
+        gruposRet.forEach((lista, grupo) => {
+          const nsas = [...new Set(lista.map(x => x.nsa))].sort((a, b) => a - b);
+          const faltantes = [];
+          for (let i = 1; i < nsas.length; i++) {
+            const diff = nsas[i] - nsas[i - 1];
+            if (diff > 1 && diff <= 20) {
+              for (let m = nsas[i - 1] + 1; m < nsas[i]; m++) {
+                faltantes.push(String(m).padStart(7, '0'));
+              }
+            }
+          }
+          if (faltantes.length > 0) {
+            alertas.push({
+              tipo: 'NSA_FALTANTE',
+              nivel: 'warning',
+              titulo: `Salto de sequência (NSA) detectado em ${grupo}`,
+              mensagem: `Sequenciais de retorno ausentes na série histórica (verifique se os arquivos foram baixados do banco):`,
+              badges: faltantes
+            });
+          }
+        });
+
+        remessas.forEach(rem => {
+          if (!rem.dataISO) return;
+          const retMesmaConta = retornos.filter(ret => ret.banco === rem.banco && ret.agencia === rem.agencia);
+          if (retMesmaConta.length === 0) {
+            alertas.push({
+              tipo: 'SEM_RETORNO_CONTA',
+              nivel: 'danger',
+              titulo: `Nenhum retorno carregado para ${rem.bancoNome} (${rem.banco}) — Ag/Coop ${rem.agencia}`,
+              mensagem: `A remessa ${rem.arquivo} (${rem.dataGravacao}) foi enviada com ${rem.totalBoletos} título(s), mas não há arquivo de retorno desta conta.`,
+              badges: [rem.arquivo]
+            });
+          } else {
+            const existePosterior = retMesmaConta.some(ret => ret.dataISO && ret.dataISO >= rem.dataISO);
+            if (!existePosterior) {
+              alertas.push({
+                tipo: 'REMESSA_RECENTE_SEM_RETORNO',
+                nivel: 'warning',
+                titulo: `Remessa ${rem.arquivo} (${rem.dataGravacao}) sem retorno posterior`,
+                mensagem: `Os retornos carregados de ${rem.bancoNome} são anteriores a ${rem.dataGravacao}. Verifique se o retorno diário foi processado.`,
+                badges: [rem.arquivo]
+              });
+            }
+          }
+        });
+
+        return alertas;
+      }
+
+      function gerarResumoSuporte(item) {
+        const linhas = [
+          `CnabSync v3.0 — Diagnóstico de Título`,
+          `Boleto: ${item.nossoNumeroFormatado} (${item.bancoNome} ${item.banco} | Ag/Coop ${item.agencia || '-'})`,
+          `Chave Composta: ${item.chaveComposta}`,
+          `Pagador: ${item.nomeSacado} | CPF/CNPJ: ${formatarCpfCnpj(item.cpfCnpj)}`,
+          `Valor: ${item.valorFormatado} | Vencimento: ${item.dataVencimento}`,
+          `Remessa: ${item.arquivoRemessa} (${item.dataRemessa}, Linha ${item.linhaRemessa})`
+        ];
+
+        if (!item.retornos || item.retornos.length === 0) {
+          linhas.push(`Retorno: Nenhum retorno localizado`);
+          linhas.push(`Diagnóstico: Título sem arquivo de retorno correspondente (verifique transmissão da remessa ou download do retorno diário).`);
+        } else {
+          const retResumo = item.retornos.map(r => `${r.arquivoOrigem} [${r.codOcorrencia} - ${r.ocorrenciaLabel} em ${r.dataOcorrencia}]`).join('; ');
+          linhas.push(`Retorno(s): ${retResumo}`);
+          if (item.motivoRejeicao) {
+            linhas.push(`Motivo Rejeição: ${item.motivoRejeicao}`);
+          }
+          linhas.push(`Status Atual: ${item.statusLabel}`);
+        }
+        return linhas.join('\n');
+      }
+
+      return {
+        formatarMoeda,
+        formatarCpfCnpj,
+        decodificarLinhaDigitavel,
+        parseArquivo,
+        cruzar,
+        auditarLacunas,
+        gerarResumoSuporte
+      };
+    })();
+
+    /**
+     * =========================================================================
+     * Conjunto Realista de Demonstração (12 Títulos Multi-Bancos + Salto NSA)
+     * =========================================================================
+     */
+    function criarDadosDemonstracao() {
+      const remessas = [
+        {
+          tipo: 'REMESSA',
+          arquivo: '45892N10.CRM',
+          layout: 'CNAB 400',
+          banco: '748',
+          bancoNome: 'Sicredi',
+          agencia: '0718',
+          cedente: '45892',
+          nsa: 1480,
+          nsaRaw: '0001480',
+          dataGravacao: '10/11/2026',
+          dataISO: '2026-11-10',
+          totalBoletos: 4,
+          boletos: [
+            {
+              chaveComposta: '748_0718_262145753',
+              nossoNumeroRaw: '262145753',
+              nossoNumeroFormatado: '26/214575-3',
+              sequencial: '214575',
+              nomeSacado: 'COOPERATIVA AGROINDUSTRIAL VALE VERDE LTDA',
+              cpfCnpj: '12458963000145',
+              valor: 4850.00,
+              valorFormatado: 'R$ 4.850,00',
+              dataVencimento: '12/11/2026',
+              arquivoOrigem: '45892N10.CRM',
+              linhaArquivo: 2,
+              banco: '748',
+              bancoNome: 'Sicredi',
+              agencia: '0718',
+              cedente: '45892',
+              layout: 'CNAB 400',
+              dataRemessa: '10/11/2026',
+              dataRemessaISO: '2026-11-10'
+            },
+            {
+              chaveComposta: '748_0718_262145761',
+              nossoNumeroRaw: '262145761',
+              nossoNumeroFormatado: '26/214576-1',
+              sequencial: '214576',
+              nomeSacado: 'METALURGICA HORIZONTE SUL S/A',
+              cpfCnpj: '88741256000190',
+              valor: 12340.50,
+              valorFormatado: 'R$ 12.340,50',
+              dataVencimento: '15/11/2026',
+              arquivoOrigem: '45892N10.CRM',
+              linhaArquivo: 3,
+              banco: '748',
+              bancoNome: 'Sicredi',
+              agencia: '0718',
+              cedente: '45892',
+              layout: 'CNAB 400',
+              dataRemessa: '10/11/2026',
+              dataRemessaISO: '2026-11-10'
+            },
+            {
+              chaveComposta: '748_0718_262145770',
+              nossoNumeroRaw: '262145770',
+              nossoNumeroFormatado: '26/214577-0',
+              sequencial: '214577',
+              nomeSacado: 'TRANSPORTADORA ROTA CERTA EIRELI',
+              cpfCnpj: '33654789000112',
+              valor: 1890.00,
+              valorFormatado: 'R$ 1.890,00',
+              dataVencimento: '18/11/2026',
+              arquivoOrigem: '45892N10.CRM',
+              linhaArquivo: 4,
+              banco: '748',
+              bancoNome: 'Sicredi',
+              agencia: '0718',
+              cedente: '45892',
+              layout: 'CNAB 400',
+              dataRemessa: '10/11/2026',
+              dataRemessaISO: '2026-11-10'
+            },
+            {
+              chaveComposta: '748_0718_262145788',
+              nossoNumeroRaw: '262145788',
+              nossoNumeroFormatado: '26/214578-8',
+              sequencial: '214578',
+              nomeSacado: 'CLINICA MEDICA SANTA CLARA LTDA',
+              cpfCnpj: '45123987000166',
+              valor: 3200.00,
+              valorFormatado: 'R$ 3.200,00',
+              dataVencimento: '20/11/2026',
+              arquivoOrigem: '45892N10.CRM',
+              linhaArquivo: 5,
+              banco: '748',
+              bancoNome: 'Sicredi',
+              agencia: '0718',
+              cedente: '45892',
+              layout: 'CNAB 400',
+              dataRemessa: '10/11/2026',
+              dataRemessaISO: '2026-11-10'
+            }
+          ]
+        },
+        {
+          tipo: 'REMESSA',
+          arquivo: 'CB111101.REM',
+          layout: 'CNAB 240',
+          banco: '133',
+          bancoNome: 'Cresol',
+          agencia: '1104',
+          cedente: '90412',
+          nsa: 312,
+          nsaRaw: '0000312',
+          dataGravacao: '11/11/2026',
+          dataISO: '2026-11-11',
+          totalBoletos: 3,
+          boletos: [
+            {
+              chaveComposta: '133_1104_8804129',
+              nossoNumeroRaw: '8804129',
+              nossoNumeroFormatado: '000880412-9',
+              sequencial: '8804129',
+              nomeSacado: 'SUPERMERCADO BOM PRECO DO OESTE LTDA',
+              cpfCnpj: '21987654000108',
+              valor: 7620.80,
+              valorFormatado: 'R$ 7.620,80',
+              dataVencimento: '12/11/2026',
+              arquivoOrigem: 'CB111101.REM',
+              linhaArquivo: 4,
+              banco: '133',
+              bancoNome: 'Cresol',
+              agencia: '1104',
+              cedente: '90412',
+              layout: 'CNAB 240',
+              dataRemessa: '11/11/2026',
+              dataRemessaISO: '2026-11-11'
+            },
+            {
+              chaveComposta: '133_1104_8804137',
+              nossoNumeroRaw: '8804137',
+              nossoNumeroFormatado: '000880413-7',
+              sequencial: '8804137',
+              nomeSacado: 'JOAO CARLOS MENDES FERREIRA',
+              cpfCnpj: '04589632174',
+              valor: 945.00,
+              valorFormatado: 'R$ 945,00',
+              dataVencimento: '14/11/2026',
+              arquivoOrigem: 'CB111101.REM',
+              linhaArquivo: 6,
+              banco: '133',
+              bancoNome: 'Cresol',
+              agencia: '1104',
+              cedente: '90412',
+              layout: 'CNAB 240',
+              dataRemessa: '11/11/2026',
+              dataRemessaISO: '2026-11-11'
+            },
+            {
+              chaveComposta: '133_1104_8804145',
+              nossoNumeroRaw: '8804145',
+              nossoNumeroFormatado: '000880414-5',
+              sequencial: '8804145',
+              nomeSacado: 'CONSTRUTORA ALVORADA ENGENHARIA LTDA',
+              cpfCnpj: '60147258000133',
+              valor: 19450.00,
+              valorFormatado: 'R$ 19.450,00',
+              dataVencimento: '22/11/2026',
+              arquivoOrigem: 'CB111101.REM',
+              linhaArquivo: 8,
+              banco: '133',
+              bancoNome: 'Cresol',
+              agencia: '1104',
+              cedente: '90412',
+              layout: 'CNAB 240',
+              dataRemessa: '11/11/2026',
+              dataRemessaISO: '2026-11-11'
+            }
+          ]
+        },
+        {
+          tipo: 'REMESSA',
+          arquivo: 'CEF_240_1111.REM',
+          layout: 'CNAB 240',
+          banco: '104',
+          bancoNome: 'Caixa Econômica',
+          agencia: '3290',
+          cedente: '774120',
+          nsa: 89,
+          nsaRaw: '0000089',
+          dataGravacao: '11/11/2026',
+          dataISO: '2026-11-11',
+          totalBoletos: 2,
+          boletos: [
+            {
+              chaveComposta: '104_3290_14000000000051924',
+              nossoNumeroRaw: '14000000000051924',
+              nossoNumeroFormatado: '14/51924',
+              sequencial: '51924',
+              nomeSacado: 'DISTRIBUIDORA DE ALIMENTOS PLANALTO LTDA',
+              cpfCnpj: '19852369000171',
+              valor: 5430.25,
+              valorFormatado: 'R$ 5.430,25',
+              dataVencimento: '12/11/2026',
+              arquivoOrigem: 'CEF_240_1111.REM',
+              linhaArquivo: 4,
+              banco: '104',
+              bancoNome: 'Caixa Econômica',
+              agencia: '3290',
+              cedente: '774120',
+              layout: 'CNAB 240',
+              dataRemessa: '11/11/2026',
+              dataRemessaISO: '2026-11-11'
+            },
+            {
+              chaveComposta: '104_3290_14000000000051925',
+              nossoNumeroRaw: '14000000000051925',
+              nossoNumeroFormatado: '14/51925',
+              sequencial: '51925',
+              nomeSacado: 'AUTO PECAS E SERVICOS IMPERIAL LTDA',
+              cpfCnpj: '27418529000154',
+              valor: 2180.00,
+              valorFormatado: 'R$ 2.180,00',
+              dataVencimento: '19/11/2026',
+              arquivoOrigem: 'CEF_240_1111.REM',
+              linhaArquivo: 6,
+              banco: '104',
+              bancoNome: 'Caixa Econômica',
+              agencia: '3290',
+              cedente: '774120',
+              layout: 'CNAB 240',
+              dataRemessa: '11/11/2026',
+              dataRemessaISO: '2026-11-11'
+            }
+          ]
+        },
+        {
+          tipo: 'REMESSA',
+          arquivo: 'SAN_033_1211.REM',
+          layout: 'CNAB 240',
+          banco: '033',
+          bancoNome: 'Santander',
+          agencia: '4102',
+          cedente: '5512980',
+          nsa: 504,
+          nsaRaw: '0000504',
+          dataGravacao: '12/11/2026',
+          dataISO: '2026-11-12',
+          totalBoletos: 2,
+          boletos: [
+            {
+              chaveComposta: '033_4102_9000018472',
+              nossoNumeroRaw: '9000018472',
+              nossoNumeroFormatado: '000900001847-2',
+              sequencial: '9000018472',
+              nomeSacado: 'TECNOLOGIA E SISTEMAS NUVEM BR LTDA',
+              cpfCnpj: '38741963000188',
+              valor: 6490.00,
+              valorFormatado: 'R$ 6.490,00',
+              dataVencimento: '12/11/2026',
+              arquivoOrigem: 'SAN_033_1211.REM',
+              linhaArquivo: 4,
+              banco: '033',
+              bancoNome: 'Santander',
+              agencia: '4102',
+              cedente: '5512980',
+              layout: 'CNAB 240',
+              dataRemessa: '12/11/2026',
+              dataRemessaISO: '2026-11-12'
+            },
+            {
+              chaveComposta: '033_4102_9000018480',
+              nossoNumeroRaw: '9000018480',
+              nossoNumeroFormatado: '000900001848-0',
+              sequencial: '9000018480',
+              nomeSacado: 'FARMACIA VIDA SAUDAVEL COMERCIO LTDA',
+              cpfCnpj: '15963741000102',
+              valor: 1540.90,
+              valorFormatado: 'R$ 1.540,90',
+              dataVencimento: '28/11/2026',
+              arquivoOrigem: 'SAN_033_1211.REM',
+              linhaArquivo: 6,
+              banco: '033',
+              bancoNome: 'Santander',
+              agencia: '4102',
+              cedente: '5512980',
+              layout: 'CNAB 240',
+              dataRemessa: '12/11/2026',
+              dataRemessaISO: '2026-11-12'
+            }
+          ]
+        },
+        {
+          tipo: 'REMESSA',
+          arquivo: 'SIC_756_1211.REM',
+          layout: 'CNAB 240',
+          banco: '756',
+          bancoNome: 'Sicoob',
+          agencia: '3042',
+          cedente: '112840',
+          nsa: 215,
+          nsaRaw: '0000215',
+          dataGravacao: '12/11/2026',
+          dataISO: '2026-11-12',
+          totalBoletos: 1,
+          boletos: [
+            {
+              chaveComposta: '756_3042_419820',
+              nossoNumeroRaw: '419820',
+              nossoNumeroFormatado: '000041982-0',
+              sequencial: '419820',
+              nomeSacado: 'INDUSTRIA TEXTIL FIOS NOBRES S/A',
+              cpfCnpj: '08963258000120',
+              valor: 8910.40,
+              valorFormatado: 'R$ 8.910,40',
+              dataVencimento: '25/11/2026',
+              arquivoOrigem: 'SIC_756_1211.REM',
+              linhaArquivo: 4,
+              banco: '756',
+              bancoNome: 'Sicoob',
+              agencia: '3042',
+              cedente: '112840',
+              layout: 'CNAB 240',
+              dataRemessa: '12/11/2026',
+              dataRemessaISO: '2026-11-12'
+            }
+          ]
+        }
+      ];
+
+      const retornos = [
+        {
+          tipo: 'RETORNO',
+          arquivo: '45892N11.CRT',
+          layout: 'CNAB 400',
+          banco: '748',
+          bancoNome: 'Sicredi',
+          agencia: '0718',
+          cedente: '45892',
+          nsa: 1481,
+          nsaRaw: '0001481',
+          dataGravacao: '11/11/2026',
+          dataISO: '2026-11-11',
+          totalRegistros: 3,
+          registros: [
+            {
+              chaveComposta: '748_0718_262145753',
+              nossoNumeroRaw: '262145753',
+              nossoNumeroFormatado: '26/214575-3',
+              sequencial: '214575',
+              codOcorrencia: '02',
+              ocorrenciaLabel: 'Entrada Confirmada',
+              ocorrenciaTipo: 'registrado',
+              ocorrenciaDesc: 'Boleto registrado com sucesso na carteira do banco',
+              motivos: [],
+              dataOcorrencia: '11/11/2026',
+              dataVencimento: '12/11/2026',
+              valorTitulo: 4850.00,
+              valorTituloFormatado: 'R$ 4.850,00',
+              valorPago: 0,
+              valorPagoFormatado: 'R$ 0,00',
+              dataCredito: '-',
+              canal: 'Cooperativa',
+              banco: '748',
+              bancoNome: 'Sicredi',
+              agencia: '0718',
+              cedente: '45892',
+              layout: 'CNAB 400',
+              arquivoOrigem: '45892N11.CRT',
+              linhaArquivo: 2
+            },
+            {
+              chaveComposta: '748_0718_262145761',
+              nossoNumeroRaw: '262145761',
+              nossoNumeroFormatado: '26/214576-1',
+              sequencial: '214576',
+              codOcorrencia: '02',
+              ocorrenciaLabel: 'Entrada Confirmada',
+              ocorrenciaTipo: 'registrado',
+              ocorrenciaDesc: 'Boleto registrado com sucesso na carteira do banco',
+              motivos: [],
+              dataOcorrencia: '11/11/2026',
+              dataVencimento: '15/11/2026',
+              valorTitulo: 12340.50,
+              valorTituloFormatado: 'R$ 12.340,50',
+              valorPago: 0,
+              valorPagoFormatado: 'R$ 0,00',
+              dataCredito: '-',
+              canal: 'Cooperativa',
+              banco: '748',
+              bancoNome: 'Sicredi',
+              agencia: '0718',
+              cedente: '45892',
+              layout: 'CNAB 400',
+              arquivoOrigem: '45892N11.CRT',
+              linhaArquivo: 3
+            },
+            {
+              chaveComposta: '748_0718_262145770',
+              nossoNumeroRaw: '262145770',
+              nossoNumeroFormatado: '26/214577-0',
+              sequencial: '214577',
+              codOcorrencia: '03',
+              ocorrenciaLabel: 'Entrada Rejeitada',
+              ocorrenciaTipo: 'rejeitado',
+              ocorrenciaDesc: 'Recusado pelo banco — verifique o motivo detalhado',
+              motivos: [
+                { codigo: '48', descricao: 'CEP inválido' }
+              ],
+              dataOcorrencia: '11/11/2026',
+              dataVencimento: '18/11/2026',
+              valorTitulo: 1890.00,
+              valorTituloFormatado: 'R$ 1.890,00',
+              valorPago: 0,
+              valorPagoFormatado: 'R$ 0,00',
+              dataCredito: '-',
+              canal: 'Validação',
+              banco: '748',
+              bancoNome: 'Sicredi',
+              agencia: '0718',
+              cedente: '45892',
+              layout: 'CNAB 400',
+              arquivoOrigem: '45892N11.CRT',
+              linhaArquivo: 4
+            }
+          ]
+        },
+        {
+          tipo: 'RETORNO',
+          arquivo: '45892N12.CRT',
+          layout: 'CNAB 400',
+          banco: '748',
+          bancoNome: 'Sicredi',
+          agencia: '0718',
+          cedente: '45892',
+          nsa: 1484, // Jump 1481 -> 1484 creates NSA gap 0001482, 0001483
+          nsaRaw: '0001484',
+          dataGravacao: '12/11/2026',
+          dataISO: '2026-11-12',
+          totalRegistros: 1,
+          registros: [
+            {
+              chaveComposta: '748_0718_262145753',
+              nossoNumeroRaw: '262145753',
+              nossoNumeroFormatado: '26/214575-3',
+              sequencial: '214575',
+              codOcorrencia: '06',
+              ocorrenciaLabel: 'Liquidação Normal (PAGO)',
+              ocorrenciaTipo: 'pago',
+              ocorrenciaDesc: 'Boleto quitado pelo pagador',
+              motivos: [],
+              dataOcorrencia: '12/11/2026',
+              dataVencimento: '12/11/2026',
+              valorTitulo: 4850.00,
+              valorTituloFormatado: 'R$ 4.850,00',
+              valorPago: 4850.00,
+              valorPagoFormatado: 'R$ 4.850,00',
+              dataCredito: '13/11/2026',
+              canal: 'PIX / QR Code Cobrança',
+              banco: '748',
+              bancoNome: 'Sicredi',
+              agencia: '0718',
+              cedente: '45892',
+              layout: 'CNAB 400',
+              arquivoOrigem: '45892N12.CRT',
+              linhaArquivo: 2
+            }
+          ]
+        },
+        {
+          tipo: 'RETORNO',
+          arquivo: 'CRE_133_1211.RET',
+          layout: 'CNAB 240',
+          banco: '133',
+          bancoNome: 'Cresol',
+          agencia: '1104',
+          cedente: '90412',
+          nsa: 313,
+          nsaRaw: '0000313',
+          dataGravacao: '12/11/2026',
+          dataISO: '2026-11-12',
+          totalRegistros: 2,
+          registros: [
+            {
+              chaveComposta: '133_1104_8804129',
+              nossoNumeroRaw: '8804129',
+              nossoNumeroFormatado: '000880412-9',
+              sequencial: '8804129',
+              codOcorrencia: '06',
+              ocorrenciaLabel: 'Liquidação Normal (PAGO)',
+              ocorrenciaTipo: 'pago',
+              ocorrenciaDesc: 'Boleto quitado pelo pagador',
+              motivos: [],
+              dataOcorrencia: '12/11/2026',
+              dataVencimento: '12/11/2026',
+              valorTitulo: 7620.80,
+              valorTituloFormatado: 'R$ 7.620,80',
+              valorPago: 7620.80,
+              valorPagoFormatado: 'R$ 7.620,80',
+              dataCredito: '13/11/2026',
+              canal: 'COMPE Interbancária',
+              banco: '133',
+              bancoNome: 'Cresol',
+              agencia: '1104',
+              cedente: '90412',
+              layout: 'CNAB 240',
+              arquivoOrigem: 'CRE_133_1211.RET',
+              linhaArquivo: 4
+            },
+            {
+              chaveComposta: '133_1104_8804137',
+              nossoNumeroRaw: '8804137',
+              nossoNumeroFormatado: '000880413-7',
+              sequencial: '8804137',
+              codOcorrencia: '03',
+              ocorrenciaLabel: 'Entrada Rejeitada',
+              ocorrenciaTipo: 'rejeitado',
+              ocorrenciaDesc: 'Recusado pelo banco — verifique o motivo detalhado',
+              motivos: [{ codigo: '06', descricao: 'Tipo/Número de inscrição (CPF/CNPJ) do pagador inválido' }],
+              dataOcorrencia: '12/11/2026',
+              dataVencimento: '14/11/2026',
+              valorTitulo: 945.00,
+              valorTituloFormatado: 'R$ 945,00',
+              valorPago: 0,
+              valorPagoFormatado: 'R$ 0,00',
+              dataCredito: '-',
+              canal: 'Validação Cadastral',
+              banco: '133',
+              bancoNome: 'Cresol',
+              agencia: '1104',
+              cedente: '90412',
+              layout: 'CNAB 240',
+              arquivoOrigem: 'CRE_133_1211.RET',
+              linhaArquivo: 6
+            }
+          ]
+        },
+        {
+          tipo: 'RETORNO',
+          arquivo: 'CEF_240_1211.RET',
+          layout: 'CNAB 240',
+          banco: '104',
+          bancoNome: 'Caixa Econômica',
+          agencia: '3290',
+          cedente: '774120',
+          nsa: 90,
+          nsaRaw: '0000090',
+          dataGravacao: '12/11/2026',
+          dataISO: '2026-11-12',
+          totalRegistros: 2,
+          registros: [
+            {
+              chaveComposta: '104_3290_14000000000051924',
+              nossoNumeroRaw: '14000000000051924',
+              nossoNumeroFormatado: '14/51924',
+              sequencial: '51924',
+              codOcorrencia: '06',
+              ocorrenciaLabel: 'Liquidação Normal (PAGO)',
+              ocorrenciaTipo: 'pago',
+              ocorrenciaDesc: 'Boleto quitado pelo pagador',
+              motivos: [],
+              dataOcorrencia: '12/11/2026',
+              dataVencimento: '12/11/2026',
+              valorTitulo: 5430.25,
+              valorTituloFormatado: 'R$ 5.430,25',
+              valorPago: 5430.25,
+              valorPagoFormatado: 'R$ 5.430,25',
+              dataCredito: '13/11/2026',
+              canal: 'Internet Banking CAIXA',
+              banco: '104',
+              bancoNome: 'Caixa Econômica',
+              agencia: '3290',
+              cedente: '774120',
+              layout: 'CNAB 240',
+              arquivoOrigem: 'CEF_240_1211.RET',
+              linhaArquivo: 4
+            },
+            {
+              chaveComposta: '104_3290_14000000000051925',
+              nossoNumeroRaw: '14000000000051925',
+              nossoNumeroFormatado: '14/51925',
+              sequencial: '51925',
+              codOcorrencia: '02',
+              ocorrenciaLabel: 'Entrada Confirmada',
+              ocorrenciaTipo: 'registrado',
+              ocorrenciaDesc: 'Boleto registrado com sucesso na carteira do banco',
+              motivos: [],
+              dataOcorrencia: '12/11/2026',
+              dataVencimento: '19/11/2026',
+              valorTitulo: 2180.00,
+              valorTituloFormatado: 'R$ 2.180,00',
+              valorPago: 0,
+              valorPagoFormatado: 'R$ 0,00',
+              dataCredito: '-',
+              canal: 'SIGCB Online',
+              banco: '104',
+              bancoNome: 'Caixa Econômica',
+              agencia: '3290',
+              cedente: '774120',
+              layout: 'CNAB 240',
+              arquivoOrigem: 'CEF_240_1211.RET',
+              linhaArquivo: 6
+            }
+          ]
+        },
+        {
+          tipo: 'RETORNO',
+          arquivo: 'SAN_033_1211.RET',
+          layout: 'CNAB 240',
+          banco: '033',
+          bancoNome: 'Santander',
+          agencia: '4102',
+          cedente: '5512980',
+          nsa: 505,
+          nsaRaw: '0000505',
+          dataGravacao: '12/11/2026',
+          dataISO: '2026-11-12',
+          totalRegistros: 1,
+          registros: [
+            {
+              chaveComposta: '033_4102_9000018472',
+              nossoNumeroRaw: '9000018472',
+              nossoNumeroFormatado: '000900001847-2',
+              sequencial: '9000018472',
+              codOcorrencia: '06',
+              ocorrenciaLabel: 'Liquidação Normal (PAGO)',
+              ocorrenciaTipo: 'pago',
+              ocorrenciaDesc: 'Boleto quitado pelo pagador',
+              motivos: [],
+              dataOcorrencia: '12/11/2026',
+              dataVencimento: '12/11/2026',
+              valorTitulo: 6490.00,
+              valorTituloFormatado: 'R$ 6.490,00',
+              valorPago: 6490.00,
+              valorPagoFormatado: 'R$ 6.490,00',
+              dataCredito: '13/11/2026',
+              canal: 'STR / Compensação',
+              banco: '033',
+              bancoNome: 'Santander',
+              agencia: '4102',
+              cedente: '5512980',
+              layout: 'CNAB 240',
+              arquivoOrigem: 'SAN_033_1211.RET',
+              linhaArquivo: 4
+            }
+          ]
+        },
+        {
+          tipo: 'RETORNO',
+          arquivo: 'SIC_756_1211.RET',
+          layout: 'CNAB 240',
+          banco: '756',
+          bancoNome: 'Sicoob',
+          agencia: '3042',
+          cedente: '112840',
+          nsa: 216,
+          nsaRaw: '0000216',
+          dataGravacao: '12/11/2026',
+          dataISO: '2026-11-12',
+          totalRegistros: 1,
+          registros: [
+            {
+              chaveComposta: '756_3042_419820',
+              nossoNumeroRaw: '419820',
+              nossoNumeroFormatado: '000041982-0',
+              sequencial: '419820',
+              codOcorrencia: '02',
+              ocorrenciaLabel: 'Entrada Confirmada',
+              ocorrenciaTipo: 'registrado',
+              ocorrenciaDesc: 'Boleto registrado com sucesso na carteira do banco',
+              motivos: [],
+              dataOcorrencia: '12/11/2026',
+              dataVencimento: '25/11/2026',
+              valorTitulo: 8910.40,
+              valorTituloFormatado: 'R$ 8.910,40',
+              valorPago: 0,
+              valorPagoFormatado: 'R$ 0,00',
+              dataCredito: '-',
+              canal: 'Cooperativa Sicoob',
+              banco: '756',
+              bancoNome: 'Sicoob',
+              agencia: '3042',
+              cedente: '112840',
+              layout: 'CNAB 240',
+              arquivoOrigem: 'SIC_756_1211.RET',
+              linhaArquivo: 4
+            }
+          ]
+        }
+      ];
+
+      return { remessas, retornos };
+    }
+
+    /**
+     * =========================================================================
+     * Controlador da Interface & Auditoria
+     * =========================================================================
+     */
+    const PAGE_SIZE = 50;
+    const BATCH_SIZE = 30;
+    const SAMPLE_LD = '74891126281457530718505458921077112840000485000';
+
+    let state = {
+      isDemo: true,
+      remessas: [],
+      retornos: [],
+      conciliados: [],
+      alertas: [],
+      filtroAtual: 'todos',
+      buscaAtual: '',
+      paginaAtual: 1,
+      itemEmDiagnostico: null
+    };
+
+    const dom = {
+      btnDensityComfortable: document.getElementById('btnDensityComfortable'),
+      btnDensityCompact: document.getElementById('btnDensityCompact'),
+      btnLoadDemo: document.getElementById('btnLoadDemo'),
+      btnImportFolders: document.getElementById('btnImportFolders'),
+      btnResetSession: document.getElementById('btnResetSession'),
+      sessionStatusHint: document.getElementById('sessionStatusHint'),
+
+      heroEyebrow: document.getElementById('heroEyebrow'),
+      heroHeadline: document.getElementById('heroHeadline'),
+      heroSubline: document.getElementById('heroSubline'),
+      searchShortcutHint: document.getElementById('searchShortcutHint'),
+      heroChips: document.querySelectorAll('.hero-chip'),
+      btnSampleLd: document.getElementById('btnSampleLd'),
+
+      globalDragOverlay: document.getElementById('globalDragOverlay'),
+      dropRem: document.getElementById('dropRem'),
+      dropRet: document.getElementById('dropRet'),
+      inputAll: document.getElementById('inputAll'),
+      inputRem: document.getElementById('inputRem'),
+      inputRet: document.getElementById('inputRet'),
+      btnPickDirRem: document.getElementById('btnPickDirRem'),
+      btnPickDirRet: document.getElementById('btnPickDirRet'),
+      labelPickRem: document.getElementById('labelPickRem'),
+      labelPickRet: document.getElementById('labelPickRet'),
+      countRem: document.getElementById('countRem'),
+      countRet: document.getElementById('countRet'),
+
+      progressWrap: document.getElementById('progressWrap'),
+      progressText: document.getElementById('progressText'),
+      progressFill: document.getElementById('progressFill'),
+      progressPct: document.getElementById('progressPct'),
+
+      attentionSection: document.getElementById('attentionSection'),
+      attentionHeaderWrap: document.getElementById('attentionHeaderWrap'),
+      attentionGrid: document.getElementById('attentionGrid'),
+      btnVerPendencias: document.getElementById('btnVerPendencias'),
+      alertsPanel: document.getElementById('alertsPanel'),
+
+      kpiCells: document.querySelectorAll('.kpi-cell'),
+      statTotalRem: document.getElementById('statTotalRem'),
+      volTotalRem: document.getElementById('volTotalRem'),
+      statTotalConf: document.getElementById('statTotalConf'),
+      volTotalConf: document.getElementById('volTotalConf'),
+      statTotalPagos: document.getElementById('statTotalPagos'),
+      volTotalPagos: document.getElementById('volTotalPagos'),
+      statTotalOrfaos: document.getElementById('statTotalOrfaos'),
+      volTotalOrfaos: document.getElementById('volTotalOrfaos'),
+      breakdownOrfaos: document.getElementById('breakdownOrfaos'),
+      distributionBarWrap: document.getElementById('distributionBarWrap'),
+      distributionBar: document.getElementById('distributionBar'),
+      distributionLegend: document.getElementById('distributionLegend'),
+
+      searchInput: document.getElementById('searchInput'),
+      btnClearSearch: document.getElementById('btnClearSearch'),
+      decodedBarcodeStrip: document.getElementById('decodedBarcodeStrip'),
+      decTipoLabel: document.getElementById('decTipoLabel'),
+      decBanco: document.getElementById('decBanco'),
+      decCampoLivre: document.getElementById('decCampoLivre'),
+      decNossoNumero: document.getElementById('decNossoNumero'),
+
+      listTitle: document.getElementById('listTitle'),
+      listCount: document.getElementById('listCount'),
+      btnExportDivergencias: document.getElementById('btnExportDivergencias'),
+      btnExportCsv: document.getElementById('btnExportCsv'),
+      btnExportJson: document.getElementById('btnExportJson'),
+      listBody: document.getElementById('listBody'),
+      paginationBar: document.getElementById('paginationBar'),
+      paginationInfo: document.getElementById('paginationInfo'),
+      pageIndicator: document.getElementById('pageIndicator'),
+      btnPrevPage: document.getElementById('btnPrevPage'),
+      btnNextPage: document.getElementById('btnNextPage'),
+
+      toastBanner: document.getElementById('toastBanner'),
+      toastText: document.getElementById('toastText')
+    };
+
+    const STATUS_META = {
+      PAGO: { label: 'Pago', color: '#1B7A4B' },
+      CONFIRMADO: { label: 'Confirmado', color: '#2D5BD9' },
+      SEM_RETORNO: { label: 'Sem retorno', color: '#9A5A00' },
+      REJEITADO: { label: 'Rejeitado', color: '#B3261E' }
+    };
+
+    const FILTER_TITLES = {
+      todos: 'Todos os títulos',
+      pagos: 'Pagos',
+      confirmados: 'Confirmados',
+      pendencias: 'Pendências',
+      rejeitados: 'Rejeitados',
+      sem_retorno: 'Sem retorno',
+      semana: 'Vencem em 7 dias'
+    };
+
+    function escapeHtml(str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function plural(n, singular, pluralWord) {
+      return n === 1 ? singular : pluralWord;
+    }
+
+    function formatarNomeMisto(nome) {
+      const s = String(nome || '').trim();
+      if (!s) return '(Pagador não informado)';
+      if (s.startsWith('(')) return s;
+      const preposicoes = new Set(['de', 'da', 'do', 'dos', 'das', 'e']);
+      const siglas = new Set(['ltda', 'eireli', 's/a', 'sa', 's.a.', 'me', 'epp', 'br', 'cia']);
+      return s.toLowerCase().split(/\s+/).map((w, idx) => {
+        if (siglas.has(w)) return w.toUpperCase();
+        if (idx > 0 && preposicoes.has(w)) return w;
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      }).join(' ');
+    }
+
+    function getTodayReference() {
+      if (state.isDemo) {
+        return new Date(2026, 10, 13);
+      }
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    function parseDataBR(dataBR) {
+      if (!dataBR || dataBR === '-' || dataBR.length !== 10) return null;
+      const parts = dataBR.split('/');
+      if (parts.length !== 3) return null;
+      const d = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const y = parseInt(parts[2], 10);
+      const dt = new Date(y, m, d);
+      if (isNaN(dt.getTime()) || dt.getDate() !== d || dt.getMonth() !== m) return null;
+      return dt;
+    }
+
+    function diffDaysFromToday(dt, today) {
+      return Math.round((dt - today) / 86400000);
+    }
+
+    function formatarVencimentoRelativo(n) {
+      if (n === 0) return 'vence hoje';
+      if (n === 1) return 'vence amanhã';
+      if (n > 1) return `vence em ${n} dias`;
+      const abs = Math.abs(n);
+      return `venceu há ${abs} ${plural(abs, 'dia', 'dias')}`;
+    }
+
+    function sortByVencimentoAsc(arr) {
+      return arr.slice().sort((a, b) => {
+        const da = parseDataBR(a.dataVencimento);
+        const db = parseDataBR(b.dataVencimento);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return da - db;
+      });
+    }
+
+    let toastTimer = null;
+    function showToast(msg) {
+      dom.toastText.textContent = msg;
+      dom.toastBanner.classList.remove('hidden');
+      dom.toastBanner.classList.add('flex');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        dom.toastBanner.classList.add('hidden');
+        dom.toastBanner.classList.remove('flex');
+      }, 2600);
+    }
+
+    function copyTextSafe(text, successMsg) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (successMsg) showToast(successMsg);
+        return true;
+      } catch (e) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => {
+            if (successMsg) showToast(successMsg);
+          });
+          return true;
+        }
+        return false;
+      }
+    }
+
+    // Density Toggle ("Confortável" | "Compacta")
+    function setupDensityControls() {
+      const setDensity = (mode) => {
+        document.body.setAttribute('data-density', mode);
+        const activeCls = 'min-h-[36px] px-4 rounded-full text-[13px] font-medium bg-[#FFFFFF] text-[#171A20] transition-colors cursor-pointer';
+        const inactiveCls = 'min-h-[36px] px-4 rounded-full text-[13px] font-medium text-[#5C5E62] hover:text-[#171A20] transition-colors cursor-pointer';
+        dom.btnDensityComfortable.className = mode === 'comfortable' ? activeCls : inactiveCls;
+        dom.btnDensityCompact.className = mode === 'compact' ? activeCls : inactiveCls;
+        dom.btnDensityComfortable.setAttribute('aria-pressed', String(mode === 'comfortable'));
+        dom.btnDensityCompact.setAttribute('aria-pressed', String(mode === 'compact'));
+      };
+
+      dom.btnDensityComfortable.addEventListener('click', () => setDensity('comfortable'));
+      dom.btnDensityCompact.addEventListener('click', () => setDensity('compact'));
+    }
+
+    // File Upload, File System Access API & Drag-and-Drop
+    function setupFileHandling() {
+      dom.labelPickRem.textContent = 'Selecionar pasta';
+      dom.labelPickRet.textContent = 'Selecionar pasta';
+
+      dom.inputAll.addEventListener('change', (e) => handleFilesInBatches(e.target.files));
+      dom.inputRem.addEventListener('change', (e) => handleFilesInBatches(e.target.files));
+      dom.inputRet.addEventListener('change', (e) => handleFilesInBatches(e.target.files));
+
+      dom.btnImportFolders.addEventListener('click', () => abrirPastaDireta('AMBOS'));
+
+      dom.btnPickDirRem.addEventListener('click', (e) => {
+        e.stopPropagation();
+        abrirPastaDireta('REMESSA');
+      });
+      dom.btnPickDirRet.addEventListener('click', (e) => {
+        e.stopPropagation();
+        abrirPastaDireta('RETORNO');
+      });
+
+      setupDropCell(dom.dropRem);
+      setupDropCell(dom.dropRet);
+
+      // Global Drag Overlay
+      let dragDepth = 0;
+      window.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        dragDepth++;
+        dom.globalDragOverlay.classList.remove('hidden');
+        dom.globalDragOverlay.classList.add('flex');
+      });
+      window.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dragDepth--;
+        if (dragDepth <= 0) {
+          dragDepth = 0;
+          dom.globalDragOverlay.classList.add('hidden');
+          dom.globalDragOverlay.classList.remove('flex');
+        }
+      });
+      window.addEventListener('dragover', (e) => e.preventDefault());
+      window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dragDepth = 0;
+        dom.globalDragOverlay.classList.add('hidden');
+        dom.globalDragOverlay.classList.remove('flex');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleFilesInBatches(e.dataTransfer.files);
+        }
+      });
+
+      dom.btnLoadDemo.addEventListener('click', () => {
+        carregarDadosDemo();
+        showToast('Conjunto de demonstração carregado (12 títulos).');
+      });
+
+      dom.btnResetSession.addEventListener('click', () => {
+        limparSessao();
+        showToast('Sessão limpa. Selecione suas pastas REM e RETE.');
+      });
+    }
+
+    async function coletarArquivosDir(dirHandle, depth, maxDepth, out) {
+      for await (const entry of dirHandle.values()) {
+        if (entry.kind === 'file') {
+          out.push(await entry.getFile());
+        } else if (entry.kind === 'directory' && depth < maxDepth) {
+          if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+          await coletarArquivosDir(entry, depth + 1, maxDepth, out);
+        }
+      }
+    }
+
+    async function abrirPastaDireta(tipo) {
+      if (window.isSecureContext && 'showDirectoryPicker' in window) {
+        try {
+          const dirHandle = await window.showDirectoryPicker();
+          const files = [];
+          await coletarArquivosDir(dirHandle, 0, tipo === 'AMBOS' ? 2 : 0, files);
+          await handleFilesInBatches(files);
+          return;
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+        }
+      }
+      if (tipo === 'AMBOS') dom.inputAll.click();
+      else if (tipo === 'REMESSA') dom.inputRem.click();
+      else dom.inputRet.click();
+    }
+
+    function setupDropCell(el) {
+      ['dragenter', 'dragover'].forEach(ev => {
+        el.addEventListener(ev, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          el.classList.add('drag-over');
+        });
+      });
+      ['dragleave', 'drop'].forEach(ev => {
+        el.addEventListener(ev, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          el.classList.remove('drag-over');
+        });
+      });
+      el.addEventListener('drop', (e) => {
+        dom.globalDragOverlay.classList.add('hidden');
+        dom.globalDragOverlay.classList.remove('flex');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleFilesInBatches(e.dataTransfer.files);
+        }
+      });
+    }
+
+    async function handleFilesInBatches(fileList) {
+      const validFiles = Array.from(fileList).filter(file => {
+        const ext = file.name.split('.').pop().toUpperCase();
+        return !['ZIP', 'PDF', 'FDB', 'PNG', 'JPG', 'JPEG', 'MD', 'PFX', 'HTML', 'JS', 'CSS'].includes(ext);
+      });
+
+      if (validFiles.length === 0) {
+        showToast('Nenhum arquivo CNAB válido encontrado.');
+        return;
+      }
+
+      if (state.isDemo) {
+        state.isDemo = false;
+        state.remessas = [];
+        state.retornos = [];
+        state.conciliados = [];
+        state.alertas = [];
+        state.itemEmDiagnostico = null;
+      }
+
+      dom.progressWrap.classList.remove('hidden');
+      dom.progressWrap.classList.add('flex');
+
+      let processed = 0;
+      let validParsed = 0;
+      const total = validFiles.length;
+
+      for (let i = 0; i < total; i += BATCH_SIZE) {
+        const chunk = validFiles.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(chunk.map(file => lerArquivoTexto(file)));
+
+        results.forEach(res => {
+          if (!res) return;
+          const parsed = CnabParser.parseArquivo(res.content, res.name);
+          if (!parsed) return;
+          validParsed++;
+
+          if (parsed.tipo === 'REMESSA') {
+            state.remessas = state.remessas.filter(r => r.arquivo !== parsed.arquivo);
+            state.remessas.push(parsed);
+          } else {
+            state.retornos = state.retornos.filter(r => r.arquivo !== parsed.arquivo);
+            state.retornos.push(parsed);
+          }
+        });
+
+        processed += chunk.length;
+        const pct = Math.round((processed / total) * 100);
+        dom.progressFill.style.width = `${pct}%`;
+        dom.progressPct.textContent = `${pct}%`;
+        dom.progressText.textContent = `Lendo ${processed} de ${total} arquivos (ISO-8859-1)...`;
+        await new Promise(r => setTimeout(r, 0));
+      }
+
+      setTimeout(() => {
+        dom.progressWrap.classList.add('hidden');
+        dom.progressWrap.classList.remove('flex');
+        dom.progressFill.style.width = '0%';
+      }, 300);
+
+      updateUploadCounters();
+      reprocessarCruzamento();
+      showToast(`${validParsed} arquivo(s) CNAB processado(s).`);
+    }
+
+    function lerArquivoTexto(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve({ name: file.name, content: e.target.result });
+        reader.onerror = () => resolve(null);
+        reader.readAsText(file, 'ISO-8859-1');
+      });
+    }
+
+    function updateUploadCounters() {
+      if (state.remessas.length > 0) {
+        const totalBoletos = state.remessas.reduce((acc, r) => acc + r.totalBoletos, 0);
+        dom.countRem.textContent = `${state.remessas.length} ${plural(state.remessas.length, 'arquivo', 'arquivos')} · ${totalBoletos} ${plural(totalBoletos, 'título', 'títulos')}`;
+        dom.countRem.className = 'mt-1 text-[16px] font-medium text-[#171A20] tabular-nums truncate';
+      } else {
+        dom.countRem.textContent = 'Nenhum arquivo carregado';
+        dom.countRem.className = 'mt-1 text-[16px] font-medium text-[#5C5E62] tabular-nums truncate';
+      }
+
+      if (state.retornos.length > 0) {
+        const totalReg = state.retornos.reduce((acc, r) => acc + r.totalRegistros, 0);
+        dom.countRet.textContent = `${state.retornos.length} ${plural(state.retornos.length, 'arquivo', 'arquivos')} · ${totalReg} ${plural(totalReg, 'ocorrência', 'ocorrências')}`;
+        dom.countRet.className = 'mt-1 text-[16px] font-medium text-[#171A20] tabular-nums truncate';
+      } else {
+        dom.countRet.textContent = 'Nenhum arquivo carregado';
+        dom.countRet.className = 'mt-1 text-[16px] font-medium text-[#5C5E62] tabular-nums truncate';
+      }
+
+      const hasFiles = state.remessas.length > 0 || state.retornos.length > 0;
+      dom.sessionStatusHint.textContent = state.isDemo
+        ? 'Dados de exemplo carregados.'
+        : hasFiles
+          ? 'Arquivos locais carregados no navegador.'
+          : '';
+      dom.btnResetSession.classList.toggle('hidden', !hasFiles);
+    }
+
+    function limparSessao() {
+      state.isDemo = false;
+      state.remessas = [];
+      state.retornos = [];
+      state.conciliados = [];
+      state.alertas = [];
+      state.filtroAtual = 'todos';
+      state.buscaAtual = '';
+      state.paginaAtual = 1;
+      state.itemEmDiagnostico = null;
+      dom.inputAll.value = '';
+      dom.inputRem.value = '';
+      dom.inputRet.value = '';
+      dom.searchInput.value = '';
+      dom.btnClearSearch.classList.add('hidden');
+      dom.searchShortcutHint.classList.remove('hidden');
+      dom.decodedBarcodeStrip.classList.add('hidden');
+      dom.decodedBarcodeStrip.classList.remove('flex');
+      updateUploadCounters();
+      reprocessarCruzamento();
+    }
+
+    function carregarDadosDemo() {
+      const demo = criarDadosDemonstracao();
+      state.isDemo = true;
+      state.remessas = demo.remessas;
+      state.retornos = demo.retornos;
+      state.filtroAtual = 'todos';
+      state.buscaAtual = '';
+      state.paginaAtual = 1;
+      state.itemEmDiagnostico = null;
+      dom.searchInput.value = '';
+      dom.btnClearSearch.classList.add('hidden');
+      dom.searchShortcutHint.classList.remove('hidden');
+      dom.decodedBarcodeStrip.classList.add('hidden');
+      dom.decodedBarcodeStrip.classList.remove('flex');
+      updateUploadCounters();
+      reprocessarCruzamento();
+    }
+
+    function reprocessarCruzamento() {
+      state.conciliados = CnabParser.cruzar(state.remessas, state.retornos);
+      state.alertas = CnabParser.auditarLacunas(state.remessas, state.retornos);
+      state.paginaAtual = 1;
+      state.itemEmDiagnostico = null;
+
+      const total = state.conciliados.length;
+      const confList = state.conciliados.filter(c => c.status === 'CONFIRMADO');
+      const pagosList = state.conciliados.filter(c => c.status === 'PAGO');
+      const semRetList = state.conciliados.filter(c => c.status === 'SEM_RETORNO');
+      const rejList = state.conciliados.filter(c => c.status === 'REJEITADO');
+      const avulsoList = state.conciliados.filter(c => c.status === 'AVULSO');
+      const pendList = [...semRetList, ...rejList];
+
+      const somarValor = (arr) => arr.reduce((acc, item) => acc + (item.valor || 0), 0);
+      const volTotal = somarValor(state.conciliados);
+      const volConf = somarValor(confList);
+      const volPagos = somarValor(pagosList);
+      const volPend = somarValor(pendList);
+
+      dom.statTotalRem.textContent = total;
+      dom.volTotalRem.textContent = CnabParser.formatarMoeda(volTotal);
+
+      dom.statTotalConf.textContent = confList.length;
+      dom.volTotalConf.textContent = CnabParser.formatarMoeda(volConf);
+
+      dom.statTotalPagos.textContent = pagosList.length;
+      dom.volTotalPagos.textContent = CnabParser.formatarMoeda(volPagos);
+
+      dom.statTotalOrfaos.textContent = pendList.length;
+      dom.volTotalOrfaos.textContent = CnabParser.formatarMoeda(volPend);
+      dom.breakdownOrfaos.textContent = `${semRetList.length} sem retorno · ${rejList.length} ${plural(rejList.length, 'rejeitado', 'rejeitados')}`;
+
+      renderHero(pendList, volPend, semRetList.length, rejList.length, total, volTotal);
+      renderDistributionBar(pagosList.length, confList.length, semRetList.length, rejList.length, avulsoList.length, total);
+      renderAtencao(pendList);
+      renderAlertas();
+      syncFilterStyles();
+      renderTabela();
+    }
+
+    function renderHero(pendList, volPend, semRetCount, rejCount, total, volTotal) {
+      const today = getTodayReference();
+      if (total === 0) {
+        dom.heroEyebrow.textContent = 'Conciliação CNAB 400 e 240';
+        dom.heroHeadline.textContent = 'Importe as pastas para conciliar.';
+        dom.heroSubline.textContent = 'Selecione as pastas de remessa e retorno ou arraste os arquivos para qualquer lugar da página.';
+        return;
+      }
+
+      const mesDia = today.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
+      dom.heroEyebrow.textContent = `Resumo de ${mesDia}`;
+
+      if (pendList.length === 0) {
+        dom.heroHeadline.textContent = 'Tudo em dia. Nenhuma pendência.';
+        dom.heroSubline.textContent = `${total} ${plural(total, 'título conciliado', 'títulos conciliados')} (${CnabParser.formatarMoeda(volTotal)}), sem rejeições ou títulos sem retorno.`;
+        return;
+      }
+
+      dom.heroHeadline.textContent = `${pendList.length} ${plural(pendList.length, 'título pede', 'títulos pedem')} atenção.`;
+
+      const sorted = sortByVencimentoAsc(pendList);
+      const urgent = sorted[0];
+      const urgentDue = urgent ? parseDataBR(urgent.dataVencimento) : null;
+
+      let origem = 'entre rejeições e títulos sem retorno';
+      if (rejCount > 0 && semRetCount === 0) origem = 'em títulos rejeitados';
+      else if (semRetCount > 0 && rejCount === 0) origem = 'em títulos sem retorno';
+
+      let urgenteMsg = '';
+      if (urgent) {
+        if (urgentDue) {
+          const rel = formatarVencimentoRelativo(diffDaysFromToday(urgentDue, today));
+          urgenteMsg = ` O mais urgente (${urgent.valorFormatado}) ${rel}.`;
+        } else {
+          urgenteMsg = ` O mais urgente soma ${urgent.valorFormatado}.`;
+        }
+      }
+
+      dom.heroSubline.textContent = `${CnabParser.formatarMoeda(volPend)} em aberto ${origem}.${urgenteMsg}`;
+    }
+
+    function renderDistributionBar(pagos, conf, semRet, rej, avulso, total) {
+      const segs = [
+        { label: 'Pago', n: pagos, c: '#1B7A4B' },
+        { label: 'Confirmado', n: conf, c: '#2D5BD9' },
+        { label: 'Sem retorno', n: semRet, c: '#9A5A00' },
+        { label: 'Rejeitado', n: rej, c: '#B3261E' }
+      ];
+      if (avulso > 0) {
+        segs.push({ label: 'Outros', n: avulso, c: '#5C5E62' });
+      }
+
+      dom.distributionBarWrap.setAttribute(
+        'aria-label',
+        `Distribuição dos títulos: ${pagos} pagos, ${conf} confirmados, ${semRet} sem retorno, ${rej} rejeitados${avulso > 0 ? `, ${avulso} outros` : ''}.`
+      );
+
+      if (total === 0) {
+        dom.distributionBar.innerHTML = `<div class="flex-1 bg-[#E6E6E4] rounded-full"></div>`;
+      } else {
+        dom.distributionBar.innerHTML = segs
+          .filter(s => s.n > 0)
+          .map(s => `<div style="flex: ${s.n} 1 0; background: ${s.c}; border-radius: 4px;"></div>`)
+          .join('');
+      }
+
+      dom.distributionLegend.innerHTML = segs.map(s => `
+        <span class="inline-flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: ${s.c};"></span>
+          <span>${s.label}</span>
+          <span class="tabular-nums font-medium text-[#171A20]">${s.n}</span>
+        </span>
+      `).join('');
+    }
+
+    function renderAtencao(pendList) {
+      const sorted = sortByVencimentoAsc(pendList).slice(0, 4);
+      const today = getTodayReference();
+
+      if (sorted.length === 0) {
+        dom.attentionHeaderWrap.classList.add('hidden');
+        dom.attentionGrid.innerHTML = '';
+      } else {
+        dom.attentionHeaderWrap.classList.remove('hidden');
+        dom.btnVerPendencias.textContent = pendList.length === 1
+          ? 'Ver 1 pendência →'
+          : `Ver as ${pendList.length} pendências →`;
+
+        dom.attentionGrid.innerHTML = sorted.map(item => {
+          const isRej = item.status === 'REJEITADO';
+          const statusColor = isRej ? '#B3261E' : '#9A5A00';
+          const dt = parseDataBR(item.dataVencimento);
+          const dueLabel = dt ? formatarVencimentoRelativo(diffDaysFromToday(dt, today)) : (item.dataVencimento || 'Sem vencimento');
+          const payerName = formatarNomeMisto(item.nomeSacado);
+          const reason = isRej
+            ? `Rejeitado: ${item.motivoRejeicao || 'Entrada recusada pelo banco'}`
+            : 'Nenhum retorno localizado';
+
+          return `
+            <button
+              type="button"
+              data-attention-chave="${escapeHtml(item.chaveComposta)}"
+              class="text-left bg-[#F5F5F3] hover:bg-[#EDEDEA] rounded-[20px] px-6 py-7 flex flex-col gap-1.5 min-h-[220px] transition-colors cursor-pointer"
+            >
+              <span class="inline-flex items-center gap-2 text-[13px] font-semibold" style="color: ${statusColor};">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: ${statusColor};"></span>
+                <span>${escapeHtml(dueLabel)}</span>
+              </span>
+              <span class="mt-2 text-[17px] font-medium leading-[1.3] text-[#171A20] line-clamp-2" title="${escapeHtml(payerName)}">${escapeHtml(payerName)}</span>
+              <span class="text-[32px] font-light tracking-[-0.02em] text-[#171A20] tabular-nums">${escapeHtml(item.valorFormatado)}</span>
+              <span class="mt-auto pt-4 text-[14px] leading-[1.4] text-[#5C5E62]">${escapeHtml(reason)}</span>
+            </button>
+          `;
+        }).join('');
+      }
+
+      syncAttentionVisibility();
+    }
+
+    function syncAttentionVisibility() {
+      const hasCards = !dom.attentionHeaderWrap.classList.contains('hidden');
+      const hasAlerts = state.alertas && state.alertas.length > 0;
+      dom.attentionSection.classList.toggle('hidden', !hasCards && !hasAlerts);
+    }
+
+    function renderAlertas() {
+      if (!state.alertas || state.alertas.length === 0) {
+        dom.alertsPanel.innerHTML = '';
+        dom.alertsPanel.classList.add('hidden');
+        dom.alertsPanel.classList.remove('flex');
+        syncAttentionVisibility();
+        return;
+      }
+
+      dom.alertsPanel.classList.remove('hidden');
+      dom.alertsPanel.classList.add('flex');
+      dom.alertsPanel.innerHTML = state.alertas.map((alerta, idx) => {
+        const isDanger = alerta.nivel === 'danger';
+        const iconColor = isDanger ? '#B3261E' : '#9A5A00';
+        const badgesHtml = (alerta.badges || []).map(b =>
+          `<span class="font-mono text-[13px] font-medium text-[#171A20] bg-[#F5F5F3] px-2 py-0.5 rounded-[6px] tabular-nums">${escapeHtml(b)}</span>`
+        ).join(' ');
+
+        return `
+          <div class="border border-[#E6E6E4] rounded-[20px] px-6 py-5 flex items-center justify-between flex-wrap gap-4">
+            <div class="flex items-start gap-4 min-w-0 flex-[1_1_420px]">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="flex-shrink-0 mt-0.5">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <div class="min-w-0">
+                <div class="text-[16px] font-medium text-[#171A20]">${escapeHtml(alerta.titulo)}</div>
+                <div class="mt-1 text-[14px] leading-[1.5] text-[#5C5E62] flex flex-wrap items-center gap-1.5">
+                  <span>${escapeHtml(alerta.mensagem)}</span>
+                  ${badgesHtml}
+                </div>
+              </div>
+            </div>
+            <button type="button" onclick="dismissAlert(${idx})" class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#F5F5F3] hover:bg-[#EBEBE8] text-[#171A20] transition-colors cursor-pointer">
+              Dispensar
+            </button>
+          </div>
+        `;
+      }).join('');
+      syncAttentionVisibility();
+    }
+
+    window.dismissAlert = function (idx) {
+      state.alertas.splice(idx, 1);
+      renderAlertas();
+    };
+
+    function getItensFiltrados() {
+      let itens = state.conciliados;
+      const today = getTodayReference();
+
+      if (state.filtroAtual === 'pagos') {
+        itens = itens.filter(i => i.status === 'PAGO');
+      } else if (state.filtroAtual === 'confirmados') {
+        itens = itens.filter(i => i.status === 'CONFIRMADO');
+      } else if (state.filtroAtual === 'sem_retorno') {
+        itens = itens.filter(i => i.status === 'SEM_RETORNO');
+      } else if (state.filtroAtual === 'rejeitados') {
+        itens = itens.filter(i => i.status === 'REJEITADO');
+      } else if (state.filtroAtual === 'pendencias') {
+        itens = sortByVencimentoAsc(itens.filter(i => i.status === 'SEM_RETORNO' || i.status === 'REJEITADO'));
+      } else if (state.filtroAtual === 'semana') {
+        itens = sortByVencimentoAsc(itens.filter(i => {
+          if (i.status === 'PAGO') return false;
+          const dt = parseDataBR(i.dataVencimento);
+          if (!dt) return false;
+          const d = diffDaysFromToday(dt, today);
+          return d >= 0 && d <= 7;
+        }));
+      }
+
+      if (state.buscaAtual) {
+        const termo = state.buscaAtual.trim();
+        const ld = CnabParser.decodificarLinhaDigitavel(termo);
+        const cleanQ = ld.ehLinhaDigitavel ? ld.nossoNumeroExtraido : termo.replace(/\D/g, '');
+        const textQ = termo.toLowerCase();
+
+        itens = itens.filter(i => {
+          const matchNN = cleanQ && (
+            i.nossoNumeroRaw.includes(cleanQ) ||
+            i.sequencial.includes(cleanQ) ||
+            cleanQ.includes(i.nossoNumeroRaw)
+          );
+          const matchFmt = i.nossoNumeroFormatado.toLowerCase().includes(textQ);
+          const matchNome = i.nomeSacado.toLowerCase().includes(textQ);
+          const matchCpf = cleanQ && i.cpfCnpj.includes(cleanQ);
+          const matchBanco = i.bancoNome.toLowerCase().includes(textQ) || (cleanQ && i.banco.includes(cleanQ));
+          return matchNN || matchFmt || matchNome || matchCpf || matchBanco;
+        });
+      }
+
+      return itens;
+    }
+
+    function buildTimelineSteps(item) {
+      const steps = [];
+
+      if (item.arquivoRemessa === 'Remessa Ausente') {
+        steps.push({
+          title: 'Remessa ausente',
+          date: '-',
+          meta: 'Nenhum arquivo de remessa carregado',
+          detail: '',
+          detailColor: '#5C5E62',
+          dotStyle: 'background: #ffffff; border: 2px solid #A0A3A8;',
+          lineStyle: 'border-top: 1px dashed #BFC1C4;'
+        });
+      } else {
+        steps.push({
+          title: 'Remessa enviada',
+          date: item.dataRemessa,
+          meta: `${item.arquivoRemessa} · linha ${item.linhaRemessa}`,
+          detail: '',
+          detailColor: '#5C5E62',
+          dotStyle: 'background: #171A20;',
+          lineStyle: 'border-top: 1px solid #D0D1D2;'
+        });
+      }
+
+      if (!item.retornos || item.retornos.length === 0) {
+        steps.push({
+          title: 'Sem retorno do banco',
+          date: 'nenhum arquivo cita este título',
+          meta: '',
+          detail: 'Verifique se a remessa foi transmitida e se o retorno diário foi baixado.',
+          detailColor: '#5C5E62',
+          dotStyle: 'background: #ffffff; border: 2px solid #A0A3A8;',
+          lineStyle: 'border-top: 1px dashed #BFC1C4;'
+        });
+        return steps;
+      }
+
+      item.retornos.forEach(ret => {
+        const isRej = ret.ocorrenciaTipo === 'rejeitado';
+        const isPago = ret.ocorrenciaTipo === 'pago';
+        const isConf = ret.codOcorrencia === '02';
+
+        let title = `${ret.ocorrenciaLabel} (Cód. ${ret.codOcorrencia})`;
+        let dotColor = '#5C5E62';
+        let detail = '';
+        let detailColor = '#5C5E62';
+
+        if (isPago) {
+          title = ret.codOcorrencia === '06' ? 'Liquidado' : ret.ocorrenciaLabel;
+          dotColor = '#1B7A4B';
+          const canalLimpo = ret.canal && !/^0+$/.test(ret.canal) ? ret.canal : '';
+          detail = `${ret.valorPagoFormatado} · crédito em ${ret.dataCredito}${canalLimpo ? ' · ' + canalLimpo : ''}`;
+        } else if (isRej) {
+          title = ret.ocorrenciaLabel || 'Rejeitado pelo banco';
+          dotColor = '#B3261E';
+          detailColor = '#B3261E';
+          detail = ret.motivos && ret.motivos.length > 0
+            ? ret.motivos.map(m => `${m.codigo}: ${m.descricao}`).join(' | ')
+            : ret.ocorrenciaDesc;
+        } else if (isConf) {
+          title = 'Entrada confirmada';
+          dotColor = '#2D5BD9';
+        } else if (ret.motivos && ret.motivos.length > 0) {
+          detail = ret.motivos.map(m => `${m.codigo}: ${m.descricao}`).join(' | ');
+        }
+
+        steps.push({
+          title,
+          date: ret.dataOcorrencia,
+          meta: `${ret.arquivoOrigem} · linha ${ret.linhaArquivo}`,
+          detail,
+          detailColor,
+          dotStyle: `background: ${dotColor};`,
+          lineStyle: 'border-top: 1px solid #D0D1D2;'
+        });
+      });
+
+      if (item.status === 'CONFIRMADO') {
+        steps.push({
+          title: 'Aguardando liquidação',
+          date: item.dataVencimento && item.dataVencimento !== '-' ? `vence em ${item.dataVencimento}` : 'vencimento não informado',
+          meta: '',
+          detail: '',
+          detailColor: '#5C5E62',
+          dotStyle: 'background: #ffffff; border: 2px solid #A0A3A8;',
+          lineStyle: 'border-top: 1px dashed #BFC1C4;'
+        });
+      }
+
+      return steps;
+    }
+
+    function renderExpandedPanelHtml(item) {
+      const steps = buildTimelineSteps(item);
+      const stepsHtml = steps.map(step => `
+        <div class="flex-[1_1_220px] min-w-0 relative pt-[22px]" style="${step.lineStyle}">
+          <span class="absolute -top-[6px] left-0 w-[11px] h-[11px] rounded-full box-border" style="${step.dotStyle}"></span>
+          <div class="text-[15px] font-semibold text-[#171A20]">${escapeHtml(step.title)}</div>
+          <div class="mt-0.5 text-[13px] text-[#5C5E62] tabular-nums">${escapeHtml(step.date)}</div>
+          ${step.meta ? `<div class="mt-2 text-[12px] text-[#5C5E62] font-mono break-all">${escapeHtml(step.meta)}</div>` : ''}
+          ${step.detail ? `<div class="mt-1.5 text-[13px] leading-[1.45]" style="color: ${step.detailColor};">${escapeHtml(step.detail)}</div>` : ''}
+        </div>
+      `).join('');
+
+      const remessaMeta = item.arquivoRemessa === 'Remessa Ausente'
+        ? 'Remessa Ausente'
+        : `${item.arquivoRemessa} · linha ${item.linhaRemessa}`;
+
+      return `
+        <div class="bg-[#F5F5F3] rounded-[20px] mt-1 mb-5 p-6 sm:p-8">
+          <div class="flex flex-wrap gap-x-8 gap-y-7">
+            ${stepsHtml}
+          </div>
+
+          <div class="mt-8 pt-6 border-t border-[#E0E0DD] flex flex-wrap gap-x-10 gap-y-5 items-end justify-between">
+            <div class="flex flex-wrap gap-x-10 gap-y-4 min-w-0">
+              <div>
+                <div class="text-[12px] text-[#5C5E62]">Banco e layout</div>
+                <div class="mt-1 text-[14px] text-[#171A20]">${escapeHtml(item.bancoNome)} (${escapeHtml(item.banco)}) · ${escapeHtml(item.layout)}</div>
+              </div>
+              <div>
+                <div class="text-[12px] text-[#5C5E62]">Remessa</div>
+                <div class="mt-1 text-[13px] font-mono text-[#171A20] tabular-nums">${escapeHtml(remessaMeta)}</div>
+              </div>
+              <div class="min-w-0">
+                <div class="text-[12px] text-[#5C5E62]">Chave composta</div>
+                <div class="mt-1 text-[13px] font-mono text-[#171A20] break-all">${escapeHtml(item.chaveComposta)}</div>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                data-action="copy-key"
+                data-chave="${escapeHtml(item.chaveComposta)}"
+                class="min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center bg-[#FFFFFF] hover:bg-[#EBEBE8] border border-[#D0D1D2] text-[#171A20] transition-colors cursor-pointer"
+              >
+                Copiar chave
+              </button>
+              <button
+                type="button"
+                data-action="copy-diag"
+                data-chave="${escapeHtml(item.chaveComposta)}"
+                class="min-h-[44px] px-6 rounded-full text-[14px] font-medium inline-flex items-center bg-[#171A20] hover:bg-[#2E323B] text-white transition-colors cursor-pointer"
+              >
+                Copiar diagnóstico
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTabela() {
+      const itens = getItensFiltrados();
+      const totalItens = itens.length;
+      const totalPaginas = Math.max(1, Math.ceil(totalItens / PAGE_SIZE));
+      const today = getTodayReference();
+
+      if (state.paginaAtual > totalPaginas) state.paginaAtual = totalPaginas;
+
+      dom.listTitle.textContent = FILTER_TITLES[state.filtroAtual] || FILTER_TITLES.todos;
+      dom.listCount.textContent = `${totalItens} ${plural(totalItens, 'título', 'títulos')}`;
+
+      const inicio = (state.paginaAtual - 1) * PAGE_SIZE;
+      const fim = Math.min(inicio + PAGE_SIZE, totalItens);
+      const paginaItens = itens.slice(inicio, fim);
+
+      if (totalItens === 0) {
+        dom.paginationBar.classList.add('hidden');
+        dom.paginationBar.classList.remove('flex');
+        dom.listBody.innerHTML = `
+          <div class="border-t border-[#E6E6E4] py-16 text-center">
+            <div class="text-[20px] font-normal text-[#171A20]">Nenhum título encontrado</div>
+            <p class="mt-2 text-[14px] text-[#5C5E62]">
+              ${state.conciliados.length === 0 ? 'Selecione as pastas de remessa e retorno ou clique em Carregar exemplo.' : 'Ajuste a busca ou o filtro ativo.'}
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      dom.listBody.innerHTML = paginaItens.map(item => {
+        const isExpanded = state.itemEmDiagnostico && state.itemEmDiagnostico.chaveComposta === item.chaveComposta;
+        const st = STATUS_META[item.status] || { label: item.statusLabel, color: '#5C5E62' };
+        const payerName = formatarNomeMisto(item.nomeSacado);
+        const dt = parseDataBR(item.dataVencimento);
+        const days = dt ? diffDaysFromToday(dt, today) : null;
+
+        let relLabel = '';
+        if (item.status === 'PAGO') {
+          relLabel = 'liquidado';
+        } else if (days !== null) {
+          relLabel = formatarVencimentoRelativo(days);
+        }
+
+        const isUrgentPend = (item.status === 'REJEITADO' || item.status === 'SEM_RETORNO') && days !== null && days <= 7;
+        const relColor = isUrgentPend ? '#B3261E' : '#5C5E62';
+
+        const reasonShort = item.motivoRejeicao
+          ? item.motivoRejeicao
+          : (item.status === 'SEM_RETORNO' ? 'Nenhum retorno localizado' : '');
+
+        return `
+          <div class="border-t border-[#E6E6E4]" data-row-chave="${escapeHtml(item.chaveComposta)}">
+            <button
+              type="button"
+              class="rowhead w-full text-left flex flex-wrap items-center gap-x-6 gap-y-2 px-2 rounded-[12px] cursor-pointer"
+              aria-expanded="${isExpanded ? 'true' : 'false'}"
+              data-action="toggle-row"
+              data-chave="${escapeHtml(item.chaveComposta)}"
+            >
+              <span class="flex-[1_1_150px] min-w-0">
+                <span class="block font-mono text-[14px] font-medium text-[#171A20] tabular-nums">${escapeHtml(item.nossoNumeroFormatado)}</span>
+                <span class="block mt-0.5 text-[12px] text-[#5C5E62]">${escapeHtml(item.bancoNome)} · Ag ${escapeHtml(item.agencia || '-')}</span>
+              </span>
+
+              <span class="flex-[3_1_240px] min-w-0">
+                <span class="block text-[15px] font-medium text-[#171A20] truncate" title="${escapeHtml(payerName)}">${escapeHtml(payerName)}</span>
+                <span class="block mt-0.5 text-[12px] text-[#5C5E62] tabular-nums">${escapeHtml(CnabParser.formatarCpfCnpj(item.cpfCnpj))}</span>
+              </span>
+
+              <span class="flex-[1_1_130px] min-w-0 text-left sm:text-right text-[15px] font-medium text-[#171A20] tabular-nums">
+                ${escapeHtml(item.valorFormatado)}
+              </span>
+
+              <span class="flex-[1.2_1_150px] min-w-0">
+                <span class="block text-[14px] text-[#171A20] tabular-nums">${escapeHtml(item.dataVencimento)}</span>
+                ${relLabel ? `<span class="block mt-0.5 text-[12px]" style="color: ${relColor};">${escapeHtml(relLabel)}</span>` : ''}
+              </span>
+
+              <span class="flex-[1.4_1_160px] min-w-0">
+                <span class="inline-flex items-center gap-2 text-[14px] font-medium" style="color: ${st.color};">
+                  <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: ${st.color};"></span>
+                  <span>${escapeHtml(st.label)}</span>
+                </span>
+                ${reasonShort ? `<span class="block mt-0.5 text-[12px] truncate" style="color: ${st.color};" title="${escapeHtml(reasonShort)}">${escapeHtml(reasonShort)}</span>` : ''}
+              </span>
+
+              <span class="flex-[0_0_20px] inline-flex justify-center transition-transform duration-200 ${isExpanded ? 'rotate-180' : 'rotate-0'}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5C5E62" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </span>
+            </button>
+
+            ${isExpanded ? renderExpandedPanelHtml(item) : ''}
+          </div>
+        `;
+      }).join('');
+
+      dom.paginationBar.classList.remove('hidden');
+      dom.paginationBar.classList.add('flex');
+      dom.paginationInfo.textContent = `Mostrando ${inicio + 1}–${fim} de ${totalItens} ${plural(totalItens, 'título', 'títulos')}`;
+      dom.pageIndicator.textContent = `Página ${state.paginaAtual} de ${totalPaginas}`;
+      dom.btnPrevPage.disabled = state.paginaAtual <= 1;
+      dom.btnNextPage.disabled = state.paginaAtual >= totalPaginas;
+    }
+
+    function toggleRowExpansion(chaveComposta) {
+      const item = state.conciliados.find(c => c.chaveComposta === chaveComposta);
+      if (!item) return;
+      const alreadyOpen = state.itemEmDiagnostico && state.itemEmDiagnostico.chaveComposta === chaveComposta;
+      state.itemEmDiagnostico = alreadyOpen ? null : item;
+      renderTabela();
+    }
+
+    function setupListAndAttentionInteractions() {
+      dom.listBody.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const chave = btn.dataset.chave;
+        if (!chave) return;
+
+        if (action === 'toggle-row') {
+          toggleRowExpansion(chave);
+        } else if (action === 'copy-key') {
+          const item = state.conciliados.find(c => c.chaveComposta === chave);
+          if (!item) return;
+          copyTextSafe(item.chaveComposta, 'Chave composta copiada.');
+          btn.textContent = 'Copiado';
+          setTimeout(() => { btn.textContent = 'Copiar chave'; }, 1800);
+        } else if (action === 'copy-diag') {
+          const item = state.conciliados.find(c => c.chaveComposta === chave);
+          if (!item) return;
+          const resumo = CnabParser.gerarResumoSuporte(item);
+          copyTextSafe(resumo, 'Diagnóstico copiado para a área de transferência.');
+          btn.textContent = 'Copiado';
+          setTimeout(() => { btn.textContent = 'Copiar diagnóstico'; }, 1800);
+        }
+      });
+
+      dom.attentionGrid.addEventListener('click', (e) => {
+        const card = e.target.closest('button[data-attention-chave]');
+        if (!card) return;
+        const chave = card.dataset.attentionChave;
+        const item = state.conciliados.find(c => c.chaveComposta === chave);
+        if (!item) return;
+
+        state.filtroAtual = 'pendencias';
+        state.buscaAtual = '';
+        dom.searchInput.value = '';
+        dom.btnClearSearch.classList.add('hidden');
+        dom.btnClearSearch.classList.remove('inline-flex');
+        dom.searchShortcutHint.classList.remove('hidden');
+        dom.decodedBarcodeStrip.classList.add('hidden');
+        dom.decodedBarcodeStrip.classList.remove('flex');
+
+        const filtrados = getItensFiltrados();
+        const idx = filtrados.findIndex(c => c.chaveComposta === chave);
+        state.paginaAtual = idx >= 0 ? Math.floor(idx / PAGE_SIZE) + 1 : 1;
+        state.itemEmDiagnostico = item;
+
+        syncFilterStyles();
+        renderTabela();
+
+        const targetRow = dom.listBody.querySelector(`[data-row-chave="${CSS.escape(chave)}"]`);
+        if (targetRow) {
+          targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          document.getElementById('ledger').scrollIntoView({ behavior: 'smooth' });
+        }
+      });
+
+      dom.btnVerPendencias.addEventListener('click', () => {
+        state.filtroAtual = 'pendencias';
+        state.paginaAtual = 1;
+        state.itemEmDiagnostico = null;
+        syncFilterStyles();
+        renderTabela();
+        document.getElementById('ledger').scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+
+    // Filters, KPIs & Hero Chips
+    function syncFilterStyles() {
+      dom.kpiCells.forEach(cell => {
+        const active = cell.dataset.kpiFilter === state.filtroAtual;
+        cell.classList.toggle('active-kpi', active);
+        cell.setAttribute('aria-pressed', String(active));
+        cell.style.borderTopColor = active ? '#171A20' : '#E6E6E4';
+      });
+
+      const chipBase = 'min-h-[44px] px-5 rounded-full text-[14px] font-medium inline-flex items-center transition-colors cursor-pointer';
+      const chipActive = `${chipBase} bg-[#171A20] text-white`;
+      const chipIdle = `${chipBase} bg-[#F5F5F3] text-[#171A20] hover:bg-[#EBEBE8]`;
+
+      dom.heroChips.forEach(chip => {
+        const active = chip.dataset.chipFilter === state.filtroAtual;
+        chip.className = `hero-chip ${active ? chipActive : chipIdle}`;
+        chip.setAttribute('aria-pressed', String(active));
+      });
+
+      const ldActive = dom.searchInput.value.trim() === SAMPLE_LD;
+      dom.btnSampleLd.className = ldActive ? chipActive : chipIdle;
+      dom.btnSampleLd.setAttribute('aria-pressed', String(ldActive));
+    }
+
+    function setupFiltersAndKPIs() {
+      dom.kpiCells.forEach(cell => {
+        cell.addEventListener('click', () => {
+          state.filtroAtual = cell.dataset.kpiFilter;
+          state.paginaAtual = 1;
+          state.itemEmDiagnostico = null;
+          syncFilterStyles();
+          renderTabela();
+        });
+      });
+
+      dom.heroChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+          const targetFilter = chip.dataset.chipFilter;
+          state.filtroAtual = state.filtroAtual === targetFilter ? 'todos' : targetFilter;
+          state.paginaAtual = 1;
+          state.itemEmDiagnostico = null;
+          syncFilterStyles();
+          renderTabela();
+        });
+      });
+
+      dom.btnSampleLd.addEventListener('click', () => {
+        if (dom.searchInput.value.trim() === SAMPLE_LD) {
+          dom.searchInput.value = '';
+          executarBusca(false);
+        } else {
+          window.testarLinhaDigitavelExemplo();
+        }
+      });
+    }
+
+    window.testarLinhaDigitavelExemplo = function () {
+      dom.searchInput.value = SAMPLE_LD;
+      executarBusca(false);
+    };
+
+    // Search & Barcode Decoding
+    function executarBusca(expandirPrimeiro) {
+      const val = dom.searchInput.value.trim();
+      state.buscaAtual = val;
+      state.paginaAtual = 1;
+      state.itemEmDiagnostico = null;
+
+      if (val) {
+        dom.btnClearSearch.classList.remove('hidden');
+        dom.btnClearSearch.classList.add('inline-flex');
+        dom.searchShortcutHint.classList.add('hidden');
+      } else {
+        dom.btnClearSearch.classList.add('hidden');
+        dom.btnClearSearch.classList.remove('inline-flex');
+        dom.searchShortcutHint.classList.remove('hidden');
+        dom.decodedBarcodeStrip.classList.add('hidden');
+        dom.decodedBarcodeStrip.classList.remove('flex');
+        syncFilterStyles();
+        renderTabela();
+        return;
+      }
+
+      const ld = CnabParser.decodificarLinhaDigitavel(val);
+      if (ld.ehLinhaDigitavel) {
+        dom.decodedBarcodeStrip.classList.remove('hidden');
+        dom.decodedBarcodeStrip.classList.add('flex');
+        dom.decTipoLabel.textContent = ld.tipoEntrada.includes('44') ? 'Código de barras reconhecido' : 'Linha digitável reconhecida';
+        dom.decBanco.textContent = `${ld.bancoNome} (${ld.codBanco})`;
+        dom.decCampoLivre.textContent = ld.campoLivre;
+        dom.decNossoNumero.textContent = ld.nossoNumeroExtraido;
+      } else {
+        dom.decodedBarcodeStrip.classList.add('hidden');
+        dom.decodedBarcodeStrip.classList.remove('flex');
+      }
+
+      const filtrados = getItensFiltrados();
+      if (expandirPrimeiro && filtrados.length > 0) {
+        state.itemEmDiagnostico = filtrados[0];
+      }
+
+      syncFilterStyles();
+      renderTabela();
+    }
+
+    function setupSearchAndShortcuts() {
+      dom.searchInput.addEventListener('input', () => executarBusca(false));
+      dom.searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          executarBusca(true);
+        }
+      });
+      dom.btnClearSearch.addEventListener('click', () => {
+        dom.searchInput.value = '';
+        executarBusca(false);
+        dom.searchInput.focus();
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          dom.searchInput.focus();
+          dom.searchInput.select();
+        } else if (e.key === 'Escape') {
+          if (state.itemEmDiagnostico) {
+            state.itemEmDiagnostico = null;
+            renderTabela();
+          }
+        }
+      });
+    }
+
+    // Pagination & Exports (CSV UTF-8 BOM + JSON)
+    function exportarItensCsv(itens, prefixoArquivo, toastMsg) {
+      const headers = ['ChaveComposta', 'NossoNumero', 'Banco', 'Agencia', 'Layout', 'Sacado', 'CPF_CNPJ', 'Valor', 'Vencimento', 'Remessa', 'Status', 'MotivoRejeicao', 'Retornos'];
+      const rows = itens.map(c => [
+        `"${c.chaveComposta}"`,
+        `"${c.nossoNumeroFormatado}"`,
+        `"${c.bancoNome}"`,
+        `"${c.agencia || ''}"`,
+        `"${c.layout}"`,
+        `"${c.nomeSacado}"`,
+        `"${c.cpfCnpj}"`,
+        c.valor.toFixed(2),
+        c.dataVencimento,
+        `"${c.arquivoRemessa}"`,
+        `"${c.statusLabel}"`,
+        `"${c.motivoRejeicao || ''}"`,
+        `"${c.retornos.map(r => `${r.arquivoOrigem}[${r.codOcorrencia}]`).join('; ')}"`
+      ]);
+      const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      baixarBlob(url, `${prefixoArquivo}_${new Date().toISOString().slice(0, 10)}.csv`);
+      showToast(toastMsg);
+    }
+
+    function setupPaginationAndExports() {
+      dom.btnPrevPage.addEventListener('click', () => {
+        if (state.paginaAtual > 1) {
+          state.paginaAtual--;
+          state.itemEmDiagnostico = null;
+          renderTabela();
+        }
+      });
+
+      dom.btnNextPage.addEventListener('click', () => {
+        const totalPaginas = Math.ceil(getItensFiltrados().length / PAGE_SIZE);
+        if (state.paginaAtual < totalPaginas) {
+          state.paginaAtual++;
+          state.itemEmDiagnostico = null;
+          renderTabela();
+        }
+      });
+
+      dom.btnExportDivergencias.addEventListener('click', () => {
+        if (state.conciliados.length === 0) {
+          showToast('Nenhum dado carregado para exportar.');
+          return;
+        }
+        const divergencias = state.conciliados.filter(c =>
+          c.status === 'REJEITADO' || c.status === 'SEM_RETORNO' || c.status === 'AVULSO'
+        );
+        if (divergencias.length === 0) {
+          showToast('Nenhuma divergência encontrada para exportar.');
+          return;
+        }
+        exportarItensCsv(
+          divergencias,
+          'cnabsync_divergencias',
+          `${divergencias.length} divergência(s) exportada(s) em CSV (UTF-8 BOM).`
+        );
+      });
+
+      dom.btnExportCsv.addEventListener('click', () => {
+        if (state.conciliados.length === 0) {
+          showToast('Nenhum dado carregado para exportar.');
+          return;
+        }
+        exportarItensCsv(
+          state.conciliados,
+          'cnabsync_conciliacao',
+          'Relatório CSV exportado (UTF-8 BOM).'
+        );
+      });
+
+      dom.btnExportJson.addEventListener('click', () => {
+        if (state.conciliados.length === 0) {
+          showToast('Nenhum dado carregado para exportar.');
+          return;
+        }
+        const payload = {
+          geradoEm: new Date().toISOString(),
+          resumo: {
+            total: state.conciliados.length,
+            pagos: state.conciliados.filter(c => c.status === 'PAGO').length,
+            confirmados: state.conciliados.filter(c => c.status === 'CONFIRMADO').length,
+            semRetorno: state.conciliados.filter(c => c.status === 'SEM_RETORNO').length,
+            rejeitados: state.conciliados.filter(c => c.status === 'REJEITADO').length
+          },
+          alertas: state.alertas,
+          titulos: state.conciliados
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        baixarBlob(url, `cnabsync_dados_${new Date().toISOString().slice(0, 10)}.json`);
+        showToast('Arquivo JSON exportado.');
+      });
+    }
+
+    function baixarBlob(url, filename) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      setupDensityControls();
+      setupFileHandling();
+      setupListAndAttentionInteractions();
+      setupFiltersAndKPIs();
+      setupSearchAndShortcuts();
+      setupPaginationAndExports();
+      carregarDadosDemo();
+    });
+  </script>
+</body>
+</html>
