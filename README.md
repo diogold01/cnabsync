@@ -2,6 +2,8 @@
 
 Ferramenta web em arquivo único para conferir arquivos de remessa e retorno bancário (CNAB 240 e CNAB 400) direto no navegador.
 
+**Acessar:** https://diogold01.github.io/cnabsync/
+
 ## Para que serve
 
 No dia a dia de quem emite boletos, conferir manualmente o que foi enviado na remessa, o que o banco confirmou, o que foi pago e o que ficou sem retorno ou rejeitado exige abrir vários arquivos de texto.
@@ -16,12 +18,6 @@ O CnabSync lê as pastas de remessa e retorno localmente, cruza os títulos pelo
 ## Privacidade
 
 Tudo roda no seu navegador. Nenhum arquivo CNAB sai do computador ou é enviado para servidor.
-
-## Visualização
-
-![Visão geral do CnabSync](assets/preview-visao-geral.png)
-
-![Atenção agora e lista de pendências](assets/preview-pendencias.png)
 
 ## Bancos suportados
 
