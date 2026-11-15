@@ -1,3 +1,17 @@
 .DS_Store
 Thumbs.db
 *.log
+GLOBAL_RULES.md
+GEMINI.md
+CLAUDE.md
+rules.md
+context.md
+*.rem
+*.REM
+*.ret
+*.RET
+*.crm
+*.CRM
+*.crt
+*.CRT
+*.pfx
