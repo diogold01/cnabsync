@@ -1,11 +1,8 @@
 .DS_Store
 Thumbs.db
 *.log
-GLOBAL_RULES.md
-GEMINI.md
-CLAUDE.md
-rules.md
-context.md
+
+# Arquivos bancários locais de teste
 *.rem
 *.REM
 *.ret
